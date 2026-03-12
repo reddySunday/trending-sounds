@@ -413,28 +413,29 @@ function switchTab(type) {
 
 function fillTemplate(type, soundName, artistName) {
   if (type === "email") {
-    emailSubject.value = `Collaboration Opportunity — "${soundName}"`;
-    messageBody.value = `Hi ${artistName},
+    emailSubject.value = `${soundName} - SUNDAY / Sony Music`;
+    messageBody.value = `Hi ${artistName} & management,
 
-I came across your sound "${soundName}" which is trending on TikTok right now — congratulations on the momentum!
+I hope you're well.
 
-I'd love to chat about how we can work together to take this even further. We help independent artists amplify their reach through strategic promotion and partnerships.
+My name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).
 
-Would you be open to a quick call this week to explore what a collaboration could look like?
+I came across "${soundName}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.
 
-Looking forward to hearing from you!
+Is it independently released?
+I'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.
 
-Best regards,
-[Your Name]
-[Your Company]`;
+Happy to set up a call to discuss further.
+
+Best,`;
   } else {
-    messageBody.value = `Hey ${artistName}! 👋
+    messageBody.value = `Hey ${artistName} - really excited about ${soundName}!
+I'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).
 
-Saw your sound "${soundName}" is blowing up on TikTok right now — amazing work! 🔥
+Are you releasing independently?
+Would be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.
 
-I work with independent artists and would love to chat about helping you take this momentum even further.
-
-Would you be open to a quick convo? Let me know!`;
+- Oisín, A&R @ SUNDAY (+45 22560259)`;
   }
 }
 
