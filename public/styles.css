@@ -761,10 +761,6 @@ header h1 {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
 }
 
-.sound-actions {
-  flex-shrink: 0;
-}
-
 .outreach-btn {
   padding: 8px 16px;
   background: linear-gradient(135deg, rgba(0, 240, 255, 0.12), rgba(180, 74, 255, 0.12));
@@ -960,6 +956,256 @@ header h1 {
   display: none;
 }
 
+/* ============ RESEARCH LINKS ============ */
+.research-links {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.research-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.research-link:hover {
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ============ PIPELINE CRM ============ */
+.pipeline-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pipeline-filter-btn {
+  padding: 7px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 100px;
+  color: var(--text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pipeline-filter-btn:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  color: var(--text);
+}
+
+.pipeline-filter-btn.active {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(180, 74, 255, 0.15));
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.pipeline-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid var(--badge-color, #6a7091);
+  background: color-mix(in srgb, var(--badge-color, #6a7091) 15%, transparent);
+  color: var(--badge-color, #6a7091);
+  border-radius: 100px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.pipeline-badge:hover {
+  filter: brightness(1.3);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--badge-color, #6a7091) 40%, transparent);
+}
+
+.sound-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* ============ BATCH OUTREACH ============ */
+.sound-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.sound-checkbox:checked {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.sound-checkbox:checked::after {
+  content: '\2713';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sound-checkbox:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.sound-card.selected {
+  border-color: rgba(0, 240, 255, 0.35);
+  background: rgba(0, 240, 255, 0.04);
+}
+
+.batch-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(10, 10, 22, 0.95);
+  border-top: 1px solid var(--cyan);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 -4px 30px rgba(0, 240, 255, 0.1);
+}
+
+.batch-bar[hidden] {
+  display: none;
+}
+
+.batch-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+.batch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 11px;
+}
+
+.batch-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+.batch-modal[hidden] {
+  display: none;
+}
+
+.batch-modal-content {
+  background: rgba(12, 12, 25, 0.98);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 28px;
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.1);
+}
+
+.batch-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.batch-modal-header h3 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan);
+}
+
+.batch-artist {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 240, 255, 0.05);
+  border-radius: 6px;
+  border-left: 3px solid var(--cyan);
+}
+
+.batch-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ============ DAILY DIGEST ============ */
+.digest-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.digest-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(12, 12, 25, 0.92);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all 0.2s;
+}
+
+.digest-card:hover {
+  border-color: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.06);
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 600px) {
   #app {
@@ -994,6 +1240,33 @@ header h1 {
   }
 
   .actions {
+    flex-direction: column;
+  }
+
+  .quick-actions {
+    flex-wrap: wrap;
+  }
+
+  .batch-bar {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .batch-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pipeline-toggles {
+    flex-wrap: wrap;
+  }
+
+  .batch-modal-content {
+    padding: 20px;
+  }
+
+  .batch-modal-actions {
     flex-direction: column;
   }
 }

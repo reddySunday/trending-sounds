@@ -52,6 +52,19 @@
           </div>
 
           <div class="filter-section">
+            <label class="filter-heading">Pipeline Status</label>
+            <div class="pipeline-toggles">
+              <button class="pipeline-filter-btn active" data-pipeline="all" onclick="togglePipelineFilter(this)">All</button>
+              <button class="pipeline-filter-btn" data-pipeline="new" onclick="togglePipelineFilter(this)">New</button>
+              <button class="pipeline-filter-btn" data-pipeline="contacted" onclick="togglePipelineFilter(this)">Contacted</button>
+              <button class="pipeline-filter-btn" data-pipeline="replied" onclick="togglePipelineFilter(this)">Replied</button>
+              <button class="pipeline-filter-btn" data-pipeline="meeting" onclick="togglePipelineFilter(this)">Meeting</button>
+              <button class="pipeline-filter-btn" data-pipeline="signed" onclick="togglePipelineFilter(this)">Signed</button>
+              <button class="pipeline-filter-btn" data-pipeline="passed" onclick="togglePipelineFilter(this)">Passed</button>
+            </div>
+          </div>
+
+          <div class="filter-section">
             <label class="filter-heading">Country</label>
             <select id="country-select" class="filter-select">
               <option value="">Worldwide</option>
@@ -182,6 +195,12 @@
         <button class="action-link" onclick="showTemplateEditor()">
           <span class="action-icon">&#9998;</span> Edit Templates
         </button>
+        <button class="action-link" onclick="toggleBatchMode()">
+          <span class="action-icon">&#9745;</span> <span id="batch-toggle-label">Batch Select</span>
+        </button>
+        <button class="action-link" onclick="showDigest()">
+          <span class="action-icon">&#128240;</span> Daily Digest
+        </button>
       </div>
 
       <!-- Template editor (hidden by default) -->
@@ -259,7 +278,30 @@
         <p id="copy-feedback" class="feedback" hidden>Copied!</p>
       </div>
     </div>
+    <!-- Digest page -->
+    <div id="page-digest" hidden>
+      <header>
+        <button class="back-btn" onclick="showList()">&larr; Back</button>
+        <h1>Daily Digest</h1>
+        <p class="subtitle" id="digest-date"></p>
+      </header>
+      <div id="digest-content" class="digest-content"></div>
+    </div>
   </div>
+
+  <!-- Batch selection bar (fixed bottom) -->
+  <div id="batch-bar" class="batch-bar" hidden>
+    <span id="batch-count" class="batch-count">0 selected</span>
+    <div class="batch-actions">
+      <button class="btn btn-sm btn-secondary" onclick="selectAllSounds()">Select All</button>
+      <button class="btn btn-sm btn-secondary" onclick="deselectAllSounds()">Deselect All</button>
+      <button class="btn btn-sm btn-primary" onclick="openBatchOutreach('email')">Batch Email</button>
+      <button class="btn btn-sm btn-primary" onclick="openBatchOutreach('instagram')">Batch Instagram</button>
+    </div>
+  </div>
+
+  <!-- Batch Instagram modal -->
+  <div id="batch-modal" class="batch-modal" hidden></div>
 
   <!-- Global outreach dropdown (outside all cards to avoid stacking context issues) -->
   <div id="global-dropdown" class="global-dropdown" hidden>

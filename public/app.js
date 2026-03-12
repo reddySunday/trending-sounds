@@ -1,13 +1,34 @@
 // Google Sheets logging
 const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzPil5g2VOQnK0DBLmWLfdkOzPVprtFk1D7a0z06_Oew3uYW6Qtrz0H3aUYjMmFD5p60A/exec";
 
+// ============ CONSTANTS ============
+
+const RESEARCH_PLATFORMS = [
+  { name: 'Spotify', icon: '&#127925;', urlTemplate: 'https://open.spotify.com/search/{artist}' },
+  { name: 'Instagram', icon: '&#128247;', urlTemplate: 'https://www.google.com/search?q={artist}+instagram' },
+];
+
+const PIPELINE_STAGES = [
+  { key: 'new',       label: 'New',       color: '#6a7091' },
+  { key: 'contacted', label: 'Contacted', color: '#00f0ff' },
+  { key: 'replied',   label: 'Replied',   color: '#b44aff' },
+  { key: 'meeting',   label: 'Meeting',   color: '#ff9f1a' },
+  { key: 'signed',    label: 'Signed',    color: '#00ff88' },
+  { key: 'passed',    label: 'Passed',    color: '#ff2d95' },
+];
+
 // ============ STATE ============
-let allSounds = [];      // raw from API
-let filteredSounds = [];  // after client-side filters
+let allSounds = [];
+let filteredSounds = [];
 let currentSound = null;
 let currentType = "email";
 let displayCount = 10;
 let searchTimeout = null;
+let activePipelineFilter = "all";
+let selectedSounds = new Set();
+let batchMode = false;
+let batchIgQueue = [];
+let batchIgIndex = 0;
 
 // ============ DOM REFS ============
 const pageList = document.getElementById("page-list");
@@ -55,6 +76,244 @@ gdEmail.addEventListener("click", () => {
   globalDropdown.hidden = true;
   if (activeDropdownIndex !== null) openOutreach(activeDropdownIndex, "email");
 });
+
+// ============ RESEARCH HUB ============
+
+function buildResearchLinks(artist) {
+  const encoded = encodeURIComponent(artist);
+  return `<div class="research-links">${
+    RESEARCH_PLATFORMS.map(p =>
+      `<a href="${p.urlTemplate.replace('{artist}', encoded)}" target="_blank" rel="noopener" class="research-link" title="${p.name}"><span>${p.icon}</span></a>`
+    ).join('')
+  }</div>`;
+}
+
+// ============ PIPELINE CRM ============
+
+function getPipelineKey(sound) {
+  const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown";
+  const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown";
+  return `${artist}|||${name}`;
+}
+
+function getAllPipelineStatuses() {
+  try {
+    const saved = localStorage.getItem("pipeline_statuses");
+    return saved ? JSON.parse(saved) : {};
+  } catch { return {}; }
+}
+
+function getPipelineStatus(sound) {
+  const all = getAllPipelineStatuses();
+  const key = getPipelineKey(sound);
+  return all[key]?.status || "new";
+}
+
+function setPipelineStatus(sound, status) {
+  const all = getAllPipelineStatuses();
+  const key = getPipelineKey(sound);
+  all[key] = { status, updatedAt: new Date().toISOString() };
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  syncPipelineToSheet(sound, status);
+}
+
+function cyclePipelineStatus(index) {
+  const toShow = getDisplaySounds();
+  const sound = toShow[index];
+  if (!sound) return;
+  const current = getPipelineStatus(sound);
+  const currentIdx = PIPELINE_STAGES.findIndex(s => s.key === current);
+  const nextIdx = (currentIdx + 1) % PIPELINE_STAGES.length;
+  setPipelineStatus(sound, PIPELINE_STAGES[nextIdx].key);
+  renderSounds();
+}
+
+function syncPipelineToSheet(sound, status) {
+  const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown";
+  const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown";
+  const tiktokLink = sound.tiktok_official_link || "";
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({
+      date: new Date().toLocaleDateString("en-US"),
+      soundName: name,
+      artist: artist,
+      platform: "Status Update",
+      tiktokLink: tiktokLink,
+      status: status,
+    }),
+  }).catch(() => {});
+}
+
+function togglePipelineFilter(btn) {
+  document.querySelectorAll(".pipeline-filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activePipelineFilter = btn.dataset.pipeline;
+  renderSounds();
+}
+
+// ============ BATCH OUTREACH ============
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  selectedSounds.clear();
+  document.getElementById("batch-toggle-label").textContent = batchMode ? "Exit Batch" : "Batch Select";
+  renderSounds();
+  updateBatchBar();
+}
+
+function toggleSoundSelection(index, event) {
+  event.stopPropagation();
+  if (selectedSounds.has(index)) {
+    selectedSounds.delete(index);
+  } else {
+    selectedSounds.add(index);
+  }
+  const checkbox = document.getElementById(`select-sound-${index}`);
+  if (checkbox) checkbox.checked = selectedSounds.has(index);
+  const card = checkbox?.closest(".sound-card");
+  if (card) card.classList.toggle("selected", selectedSounds.has(index));
+  updateBatchBar();
+}
+
+function selectAllSounds() {
+  const toShow = getDisplaySounds();
+  for (let i = 0; i < toShow.length; i++) selectedSounds.add(i);
+  document.querySelectorAll(".sound-checkbox").forEach(cb => cb.checked = true);
+  document.querySelectorAll(".sound-card").forEach(c => c.classList.add("selected"));
+  updateBatchBar();
+}
+
+function deselectAllSounds() {
+  selectedSounds.clear();
+  document.querySelectorAll(".sound-checkbox").forEach(cb => cb.checked = false);
+  document.querySelectorAll(".sound-card").forEach(c => c.classList.remove("selected"));
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  const bar = document.getElementById("batch-bar");
+  const countEl = document.getElementById("batch-count");
+  if (batchMode) {
+    bar.hidden = false;
+    countEl.textContent = `${selectedSounds.size} selected`;
+  } else {
+    bar.hidden = true;
+  }
+}
+
+function openBatchOutreach(type) {
+  if (selectedSounds.size === 0) return;
+  const toShow = getDisplaySounds();
+  const sounds = Array.from(selectedSounds).map(i => toShow[i]).filter(Boolean);
+
+  if (type === "email") {
+    sounds.forEach((s, idx) => {
+      const name = s.tiktok_name_of_sound || s.song_name || "Unknown Sound";
+      const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
+      const tpl = getTemplates();
+      const subject = encodeURIComponent(tpl.emailSubject.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name));
+      const body = encodeURIComponent(tpl.emailBody.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name));
+      setTimeout(() => {
+        window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`, "_blank");
+      }, idx * 500);
+      logBatchOutreach(s, "Email");
+    });
+  } else {
+    startInstagramBatchFlow(sounds);
+  }
+}
+
+function logBatchOutreach(sound, platform) {
+  const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown Sound";
+  const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown Artist";
+  const tiktokLink = sound.tiktok_official_link || "";
+  const status = getPipelineStatus(sound);
+  if (status === "new") setPipelineStatus(sound, "contacted");
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({
+      date: new Date().toLocaleDateString("en-US"),
+      soundName: name,
+      artist: artist,
+      platform: platform,
+      tiktokLink: tiktokLink,
+      status: getPipelineStatus(sound),
+    }),
+  }).catch(() => {});
+}
+
+function startInstagramBatchFlow(sounds) {
+  batchIgQueue = sounds;
+  batchIgIndex = 0;
+  processNextInstagramBatch();
+}
+
+function processNextInstagramBatch() {
+  const modal = document.getElementById("batch-modal");
+  if (batchIgIndex >= batchIgQueue.length) {
+    modal.innerHTML = `
+      <div class="batch-modal-content">
+        <h3 style="color:var(--cyan);font-family:'JetBrains Mono',monospace;margin-bottom:12px">Batch Complete</h3>
+        <p style="color:var(--text);margin-bottom:16px">${batchIgQueue.length} Instagram messages processed.</p>
+        <button class="btn btn-primary" onclick="closeBatchModal()">Done</button>
+      </div>`;
+    return;
+  }
+
+  const s = batchIgQueue[batchIgIndex];
+  const name = s.tiktok_name_of_sound || s.song_name || "Unknown Sound";
+  const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
+  const tpl = getTemplates();
+  const message = tpl.ig.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name);
+
+  modal.hidden = false;
+  modal.innerHTML = `
+    <div class="batch-modal-content">
+      <div class="batch-modal-header">
+        <h3>Instagram Batch (${batchIgIndex + 1}/${batchIgQueue.length})</h3>
+        <button class="close-editor" onclick="closeBatchModal()">&times;</button>
+      </div>
+      <p class="batch-artist">${escHtml(artist)} — ${escHtml(name)}</p>
+      <textarea class="template-textarea" rows="8" readonly>${escHtml(message)}</textarea>
+      <div class="batch-modal-actions">
+        <button class="btn btn-primary" onclick="copyAndSearchIg()">Copy & Search Instagram</button>
+        <button class="btn btn-secondary" onclick="skipBatchIg()">Skip</button>
+      </div>
+    </div>`;
+}
+
+async function copyAndSearchIg() {
+  const s = batchIgQueue[batchIgIndex];
+  const name = s.tiktok_name_of_sound || s.song_name || "Unknown Sound";
+  const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
+  const tpl = getTemplates();
+  const message = tpl.ig.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name);
+
+  try { await navigator.clipboard.writeText(message); } catch {
+    const ta = document.createElement("textarea");
+    ta.value = message; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+  }
+
+  const query = encodeURIComponent(`${artist} instagram`);
+  window.open(`https://www.google.com/search?q=${query}`, "_blank");
+  logBatchOutreach(s, "IG");
+
+  batchIgIndex++;
+  setTimeout(processNextInstagramBatch, 400);
+}
+
+function skipBatchIg() {
+  batchIgIndex++;
+  processNextInstagramBatch();
+}
+
+function closeBatchModal() {
+  document.getElementById("batch-modal").hidden = true;
+  batchIgQueue = [];
+  batchIgIndex = 0;
+}
 
 // ============ FILTER MANAGEMENT ============
 
@@ -107,6 +366,7 @@ function countActiveFilters() {
   if (f.minGrowth || f.maxGrowth) count++;
   if (f.min7d || f.max7d) count++;
   if (f.minTotal || f.maxTotal) count++;
+  if (activePipelineFilter !== "all") count++;
   return count;
 }
 
@@ -121,13 +381,10 @@ function updateFilterBadge() {
 }
 
 function resetFilters() {
-  // Labels
   document.querySelectorAll(".label-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.label === "OTHERS");
   });
-  // Country
   countrySelect.value = "";
-  // Ranges
   document.getElementById("min-24h").value = "";
   document.getElementById("max-24h").value = "";
   document.getElementById("min-growth").value = "";
@@ -136,14 +393,16 @@ function resetFilters() {
   document.getElementById("max-7d").value = "";
   document.getElementById("min-total").value = "";
   document.getElementById("max-total").value = "";
-  // Sort
   sortSelect.value = "tiktok_last_24_hours_video_count";
-  // Search
   searchInput.value = "";
-  // Display count
   displayCount = 10;
   document.querySelectorAll(".display-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.count === "10");
+  });
+  // Reset pipeline filter
+  activePipelineFilter = "all";
+  document.querySelectorAll(".pipeline-filter-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.pipeline === "all");
   });
   updateFilterBadge();
   applyFilters();
@@ -153,18 +412,9 @@ function resetFilters() {
 
 function buildApiParams(filters) {
   const params = {};
-
   params.sort_by = filters.sortBy;
-
-  if (filters.labels.length > 0) {
-    params.label_categories = filters.labels.join(",");
-  }
-
-  if (filters.country) {
-    params.country_codes = filters.country;
-  }
-
-  // Range filters — send to API (also applied client-side as backup)
+  if (filters.labels.length > 0) params.label_categories = filters.labels.join(",");
+  if (filters.country) params.country_codes = filters.country;
   if (filters.min24h) params.min_count = filters.min24h;
   if (filters.max24h) params.max_count = filters.max24h;
   if (filters.minTotal) params.min_total_count = filters.minTotal;
@@ -173,10 +423,8 @@ function buildApiParams(filters) {
   if (filters.max7d) params.max_7day_count = filters.max7d;
   if (filters.minGrowth) params.min_growth = filters.minGrowth;
   if (filters.maxGrowth) params.max_growth = filters.maxGrowth;
-
   params.limit = "50";
   params.page = "1";
-
   return params;
 }
 
@@ -186,7 +434,6 @@ function clientSideFilter(sounds, filters) {
     const v7d = parseFloat(s.tiktok_last_7_days_video_count) || 0;
     const vTotal = parseFloat(s.tiktok_total_video_count) || 0;
     const growth = parseFloat(s.tiktok_last_24_hours_video_percentage) || 0;
-
     if (filters.min24h && v24h < parseFloat(filters.min24h)) return false;
     if (filters.max24h && v24h > parseFloat(filters.max24h)) return false;
     if (filters.min7d && v7d < parseFloat(filters.min7d)) return false;
@@ -195,7 +442,6 @@ function clientSideFilter(sounds, filters) {
     if (filters.maxTotal && vTotal > parseFloat(filters.maxTotal)) return false;
     if (filters.minGrowth && growth < parseFloat(filters.minGrowth)) return false;
     if (filters.maxGrowth && growth > parseFloat(filters.maxGrowth)) return false;
-
     return true;
   });
 }
@@ -218,31 +464,22 @@ async function applyFilters() {
 
 async function fetchSounds(filters) {
   if (!filters) filters = getFilterValues();
-
   loadingEl.hidden = false;
   errorEl.hidden = true;
   soundsList.hidden = true;
   resultsCount.hidden = true;
-
   try {
     const params = new URLSearchParams(buildApiParams(filters));
     const resp = await fetch(`/api/external/v1/tiktok-sounds/?${params}`);
-
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       const msg = err.error?.message || err.error || err.detail || `API returned ${resp.status}`;
       throw new Error(typeof msg === "object" ? JSON.stringify(msg) : msg);
     }
-
     const data = await resp.json();
     allSounds = data?.data?.items || data?.data || data?.results || (Array.isArray(data) ? data : []);
-
-    // Client-side range filtering (backup)
     filteredSounds = clientSideFilter(allSounds, filters);
-
-    // Client-side search
     filteredSounds = clientSideSearch(filteredSounds, filters.search);
-
     renderSounds();
   } catch (err) {
     errorMsg.textContent = `Failed to load sounds: ${err.message}`;
@@ -258,15 +495,12 @@ function isTikTokLink(str) {
 
 function parseTikTokLink(url) {
   url = url.trim();
-  // Extract sound name from URL like: /music/SoundName-123456
   const musicMatch = url.match(/\/music\/([^?#]+)/);
   if (musicMatch) {
-    // "SoundName-123456" → "SoundName" (remove trailing ID)
     let raw = decodeURIComponent(musicMatch[1]);
     raw = raw.replace(/-\d+$/, "").replace(/-/g, " ");
     return { name: raw, link: url };
   }
-  // Fallback: just use the URL
   return { name: "TikTok Sound", link: url };
 }
 
@@ -274,11 +508,8 @@ function onSearchInput() {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
     const query = searchInput.value.trim();
-
-    // Detect TikTok link
     if (isTikTokLink(query)) {
       const parsed = parseTikTokLink(query);
-      // Create a manual sound entry for this link
       const manualSound = {
         tiktok_name_of_sound: parsed.name,
         tiktok_sound_creator_name: "Unknown Artist",
@@ -291,7 +522,6 @@ function onSearchInput() {
         label_name: "",
         _isManualLink: true,
       };
-      // Check if this link matches any already-loaded sound
       const match = allSounds.find(s =>
         s.tiktok_official_link && parsed.link.includes(s.tiktok_official_link.replace(/^https?:\/\//, ""))
       );
@@ -299,8 +529,6 @@ function onSearchInput() {
       renderSounds();
       return;
     }
-
-    // Normal text search
     if (allSounds.length > 0) {
       const filters = getFilterValues();
       filteredSounds = clientSideFilter(allSounds, filters);
@@ -310,17 +538,29 @@ function onSearchInput() {
   }, 250);
 }
 
-function renderSounds() {
-  const toShow = filteredSounds.slice(0, displayCount);
+// Helper: get the current display list (pipeline filtered + sliced)
+function getDisplaySounds() {
+  let list = filteredSounds;
+  if (activePipelineFilter !== "all") {
+    list = list.filter(s => getPipelineStatus(s) === activePipelineFilter);
+  }
+  return list.slice(0, displayCount);
+}
 
-  // Update subtitle
+function renderSounds() {
+  // Apply pipeline filter
+  let pipelineFiltered = filteredSounds;
+  if (activePipelineFilter !== "all") {
+    pipelineFiltered = pipelineFiltered.filter(s => getPipelineStatus(s) === activePipelineFilter);
+  }
+  const toShow = pipelineFiltered.slice(0, displayCount);
+
   const sortLabel = sortSelect.options[sortSelect.selectedIndex].text.replace("Sort: ", "");
   const countryLabel = countrySelect.options[countrySelect.selectedIndex].text;
   resultsSubtitle.textContent = `Sorted by ${sortLabel} — ${countryLabel}`;
 
-  // Results count
-  if (filteredSounds.length > 0) {
-    resultsCount.textContent = `Showing ${toShow.length} of ${filteredSounds.length} sounds`;
+  if (pipelineFiltered.length > 0) {
+    resultsCount.textContent = `Showing ${toShow.length} of ${pipelineFiltered.length} sounds`;
     resultsCount.hidden = false;
   } else {
     resultsCount.hidden = true;
@@ -349,15 +589,24 @@ function renderSounds() {
       : growth24h;
 
     const tiktokLink = s.tiktok_official_link || "";
-
     const imgTag = artwork
       ? `<img class="sound-artwork" src="${escHtml(artwork)}" alt="" onerror="this.style.display='none'">`
       : `<div class="sound-artwork"></div>`;
 
-    // For manual link entries, show editable name/artist fields
+    // Pipeline badge
+    const pipelineStatus = getPipelineStatus(s);
+    const pipelineStage = PIPELINE_STAGES.find(st => st.key === pipelineStatus) || PIPELINE_STAGES[0];
+    const badgeHtml = `<button class="pipeline-badge" style="--badge-color: ${pipelineStage.color}" onclick="cyclePipelineStatus(${i})" title="Click to change status">${escHtml(pipelineStage.label)}</button>`;
+
+    // Batch checkbox
+    const checkboxHtml = batchMode
+      ? `<input type="checkbox" class="sound-checkbox" id="select-sound-${i}" ${selectedSounds.has(i) ? "checked" : ""} onclick="toggleSoundSelection(${i}, event)">`
+      : "";
+
     if (isManual) {
       return `
         <div class="sound-card manual-card">
+          ${checkboxHtml}
           <span class="sound-rank">&#128279;</span>
           <div class="sound-artwork"></div>
           <div class="sound-info" style="flex:1">
@@ -370,19 +619,21 @@ function renderSounds() {
             </div>
           </div>
           <div class="sound-actions">
+            ${badgeHtml}
             <button class="outreach-btn" onclick="outreachManual(${i})">Outreach</button>
           </div>
-        </div>
-      `;
+        </div>`;
     }
 
     return `
-      <div class="sound-card">
+      <div class="sound-card ${batchMode && selectedSounds.has(i) ? 'selected' : ''}">
+        ${checkboxHtml}
         <span class="sound-rank">${i + 1}</span>
         ${imgTag}
         <div class="sound-info">
           <div class="sound-name">${tiktokLink ? `<a href="${escHtml(tiktokLink)}" target="_blank" rel="noopener">${escHtml(name)}</a>` : escHtml(name)}</div>
           <div class="sound-artist">${escHtml(artist)}</div>
+          ${buildResearchLinks(artist)}
           ${label ? `<span class="sound-label">${escHtml(label)}</span>` : ""}
           <div class="sound-stats">
             <span class="stat growth"><strong>${growthDisplay}</strong> 24h</span>
@@ -392,10 +643,10 @@ function renderSounds() {
           </div>
         </div>
         <div class="sound-actions">
+          ${badgeHtml}
           <button class="outreach-btn" onclick="toggleDropdown(event, ${i})">Outreach</button>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join("");
 
   soundsList.hidden = false;
@@ -404,13 +655,11 @@ function renderSounds() {
 // ============ DROPDOWN & OUTREACH ============
 
 function outreachManual(index) {
-  // Update the manual sound entry with user-edited values
   const nameEl = document.getElementById(`manual-name-${index}`);
   const artistEl = document.getElementById(`manual-artist-${index}`);
   if (nameEl) filteredSounds[index].tiktok_name_of_sound = nameEl.value || "Unknown Sound";
   if (artistEl) filteredSounds[index].tiktok_sound_creator_name = artistEl.value || "Unknown Artist";
 
-  // Show global dropdown near the outreach button
   const btn = event.currentTarget;
   const rect = btn.getBoundingClientRect();
   globalDropdown.hidden = false;
@@ -430,43 +679,30 @@ function outreachManual(index) {
 
 function toggleDropdown(e, index) {
   e.stopPropagation();
-
-  // If already open for this index, close it
   if (!globalDropdown.hidden && activeDropdownIndex === index) {
     globalDropdown.hidden = true;
     activeDropdownIndex = null;
     return;
   }
-
-  // Position the global dropdown near the clicked button
   const btn = e.currentTarget;
   const rect = btn.getBoundingClientRect();
-
-  // Show above the button by default; if too close to top, show below
   globalDropdown.hidden = false;
   activeDropdownIndex = index;
 
   const ddHeight = globalDropdown.offsetHeight;
-  const spaceAbove = rect.top;
-  const spaceBelow = window.innerHeight - rect.bottom;
-
-  if (spaceAbove > ddHeight + 8) {
-    // Show above
+  if (rect.top > ddHeight + 8) {
     globalDropdown.style.top = (rect.top - ddHeight - 4) + "px";
   } else {
-    // Show below
     globalDropdown.style.top = (rect.bottom + 4) + "px";
   }
-
-  // Align right edge with button right edge
   const ddWidth = globalDropdown.offsetWidth;
   let left = rect.right - ddWidth;
-  if (left < 8) left = 8; // Don't go off-screen left
+  if (left < 8) left = 8;
   globalDropdown.style.left = left + "px";
 }
 
 function openOutreach(index, type) {
-  const toShow = filteredSounds.slice(0, displayCount);
+  const toShow = getDisplaySounds();
   currentSound = toShow[index];
   currentType = type;
 
@@ -567,8 +803,50 @@ function fillTemplate(type, soundName, artistName) {
   }
 }
 
+// ============ DAILY DIGEST ============
+
+async function showDigest() {
+  pageList.hidden = true;
+  pageOutreach.hidden = true;
+  document.getElementById("page-digest").hidden = false;
+
+  const digestDate = document.getElementById("digest-date");
+  const digestContent = document.getElementById("digest-content");
+  digestContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading digest...</p></div>';
+
+  try {
+    const resp = await fetch("/digest.json?t=" + Date.now());
+    if (!resp.ok) throw new Error("No digest available yet. The daily digest runs at 9:00 AM.");
+    const data = await resp.json();
+    digestDate.textContent = `Generated: ${data.generatedAt || "Unknown"}`;
+
+    if (!data.sounds || data.sounds.length === 0) {
+      digestContent.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">No unsigned trending sounds found today.</p>';
+      return;
+    }
+
+    digestContent.innerHTML = data.sounds.map((s, i) => `
+      <div class="digest-card">
+        <span class="sound-rank">${i + 1}</span>
+        <div class="sound-info">
+          <div class="sound-name">${s.link ? `<a href="${escHtml(s.link)}" target="_blank" rel="noopener">${escHtml(s.name)}</a>` : escHtml(s.name)}</div>
+          <div class="sound-artist">${escHtml(s.artist)}</div>
+          <div class="sound-stats">
+            <span class="stat growth"><strong>${s.growth24h || "N/A"}</strong> 24h</span>
+            <span class="stat"><strong>${s.videos24h || "N/A"}</strong> 24h vids</span>
+            <span class="stat"><strong>${s.videos7d || "N/A"}</strong> 7d vids</span>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    digestContent.innerHTML = `<p style="text-align:center;color:var(--pink);padding:40px">${escHtml(err.message)}</p>`;
+  }
+}
+
 function showList() {
   pageOutreach.hidden = true;
+  document.getElementById("page-digest").hidden = true;
   pageList.hidden = false;
 }
 
@@ -608,13 +886,11 @@ function sendMessage() {
     logOutreach();
     const subject = encodeURIComponent(emailSubject.value);
     const body = encodeURIComponent(messageBody.value);
-    // Open Outlook Web compose with pre-filled subject & body — signature auto-applied
     window.open(
       `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`,
       "_blank"
     );
   } else {
-    // Copy message then open Google search for artist's Instagram profile
     copyMessage().then(() => {
       const artist = currentSound.tiktok_sound_creator_name || currentSound.artists || "";
       if (artist) {
@@ -631,6 +907,12 @@ function logOutreach() {
   const artist = currentSound.tiktok_sound_creator_name || currentSound.artists || "Unknown Artist";
   const tiktokLink = currentSound.tiktok_official_link || "";
   const platform = currentType === "email" ? "Email" : "IG";
+  const status = getPipelineStatus(currentSound);
+
+  // Auto-advance to "contacted" if still "new"
+  if (status === "new") {
+    setPipelineStatus(currentSound, "contacted");
+  }
 
   fetch(SHEET_WEBHOOK, {
     method: "POST",
@@ -640,8 +922,9 @@ function logOutreach() {
       artist: artist,
       platform: platform,
       tiktokLink: tiktokLink,
+      status: getPipelineStatus(currentSound),
     }),
-  }).catch(() => {}); // fire and forget
+  }).catch(() => {});
 }
 
 // ============ UTILS ============

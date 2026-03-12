@@ -10,7 +10,8 @@ function doPost(e) {
     data.soundName,
     data.artist,
     data.platform,
-    data.tiktokLink
+    data.tiktokLink,
+    data.status || ''
   ]);
 
   return ContentService
