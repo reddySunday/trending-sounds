@@ -128,6 +128,19 @@ function cyclePipelineStatus(index) {
   renderSounds();
 }
 
+function setPipelineFromDropdown(index, newStatus) {
+  const toShow = getDisplaySounds();
+  const sound = toShow[index];
+  if (!sound) return;
+  setPipelineStatus(sound, newStatus);
+  // Update the dropdown color without full re-render
+  const stage = PIPELINE_STAGES.find(s => s.key === newStatus);
+  if (stage) {
+    const selects = document.querySelectorAll('.pipeline-select');
+    if (selects[index]) selects[index].style.setProperty('--badge-color', stage.color);
+  }
+}
+
 function syncPipelineToSheet(sound, status) {
   const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown";
   const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown";
@@ -593,7 +606,9 @@ function renderSounds() {
     // Pipeline badge
     const pipelineStatus = getPipelineStatus(s);
     const pipelineStage = PIPELINE_STAGES.find(st => st.key === pipelineStatus) || PIPELINE_STAGES[0];
-    const badgeHtml = `<button class="pipeline-badge" style="--badge-color: ${pipelineStage.color}" onclick="cyclePipelineStatus(${i})" title="Click to change status">${escHtml(pipelineStage.label)}</button>`;
+    const badgeHtml = `<select class="pipeline-select" style="--badge-color: ${pipelineStage.color}" onchange="setPipelineFromDropdown(${i}, this.value)">
+      ${PIPELINE_STAGES.map(st => `<option value="${st.key}" ${st.key === pipelineStatus ? 'selected' : ''}>${st.label}</option>`).join('')}
+    </select>`;
 
     // Batch checkbox
     const checkboxHtml = batchMode
