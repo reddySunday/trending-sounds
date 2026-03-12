@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- Landing page overlay -->
+  <div id="landing">
+    <canvas id="launch-canvas"></canvas>
+    <div id="landing-content">
+      <button id="enter-btn" onclick="startLaunch()">ENTER</button>
+    </div>
+  </div>
+
   <!-- Animated background -->
   <canvas id="bg-canvas"></canvas>
   <div class="scanlines"></div>
@@ -423,6 +431,259 @@
     window.addEventListener('resize', () => { resize(); init(); });
     init();
     animate();
+  })();
+  </script>
+
+  <!-- Rocket launch animation -->
+  <script>
+  (function() {
+    const landing = document.getElementById('landing');
+    const launchCanvas = document.getElementById('launch-canvas');
+    const ctx = launchCanvas.getContext('2d');
+    let lw, lh;
+
+    function resizeLaunch() {
+      lw = launchCanvas.width = window.innerWidth;
+      lh = launchCanvas.height = window.innerHeight;
+    }
+    resizeLaunch();
+    window.addEventListener('resize', resizeLaunch);
+
+    // Ambient stars on the landing screen
+    const ambientStars = [];
+    for (let i = 0; i < 200; i++) {
+      ambientStars.push({
+        x: Math.random() * lw,
+        y: Math.random() * lh,
+        r: Math.random() * 1.5 + 0.3,
+        twinkle: Math.random() * Math.PI * 2,
+        speed: Math.random() * 0.02 + 0.005
+      });
+    }
+
+    let animatingAmbient = true;
+    function drawAmbient() {
+      if (!animatingAmbient) return;
+      ctx.clearRect(0, 0, lw, lh);
+      for (const s of ambientStars) {
+        s.twinkle += s.speed;
+        const alpha = 0.3 + 0.7 * Math.abs(Math.sin(s.twinkle));
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.fill();
+      }
+      requestAnimationFrame(drawAmbient);
+    }
+    drawAmbient();
+
+    // Flame particle class
+    class FlameParticle {
+      constructor(x, y) {
+        this.x = x + (Math.random() - 0.5) * 20;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = Math.random() * 3 + 1;
+        this.life = 1;
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.r = Math.random() * 6 + 3;
+        this.hue = Math.random() > 0.5 ? 30 : 15; // orange / yellow
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+        this.r *= 0.98;
+      }
+      draw(c) {
+        if (this.life <= 0) return;
+        c.beginPath();
+        c.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        c.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.life * 0.8})`;
+        c.fill();
+      }
+    }
+
+    // Warp star class
+    class WarpStar {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 2 + 0.5;
+        this.x = lw / 2 + Math.cos(angle) * dist;
+        this.y = lh / 2 + Math.sin(angle) * dist;
+        this.px = this.x;
+        this.py = this.y;
+        this.angle = angle;
+        this.speed = Math.random() * 0.5 + 0.2;
+        this.accel = 1.04 + Math.random() * 0.02;
+        this.alpha = 0;
+      }
+      update() {
+        this.px = this.x;
+        this.py = this.y;
+        this.speed *= this.accel;
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+        this.alpha = Math.min(1, this.alpha + 0.02);
+        // Reset if offscreen
+        if (this.x < -50 || this.x > lw + 50 || this.y < -50 || this.y > lh + 50) {
+          this.reset();
+        }
+      }
+      draw(c) {
+        const dx = this.x - this.px;
+        const dy = this.y - this.py;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const streak = Math.min(len, 40);
+        c.beginPath();
+        c.moveTo(this.px, this.py);
+        c.lineTo(this.x, this.y);
+        c.strokeStyle = `rgba(255,255,255,${this.alpha * 0.8})`;
+        c.lineWidth = Math.min(2.5, streak / 8);
+        c.stroke();
+      }
+    }
+
+    // Launch sequence — time-based for reliable pacing
+    window.startLaunch = function() {
+      const btn = document.getElementById('enter-btn');
+      btn.classList.add('launching');
+      animatingAmbient = false;
+
+      const rocketX = lw / 2;
+      const rocketStartY = lh + 60;
+      const rocketTargetY = lh * 0.35;
+      const rocketSize = 80;
+      const flames = [];
+      const warpStars = Array.from({length: 500}, () => new WarpStar());
+
+      const startTime = performance.now() + 500; // 0.5s delay for button fade
+      const ROCKET_DUR = 2000;  // 2s rocket rise
+      const WARP_DUR = 2500;    // 2.5s warp
+      const FLASH_DUR = 800;    // 0.8s flash
+
+      // Ease-out cubic
+      function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+      function animate(now) {
+        const elapsed = now - startTime;
+        if (elapsed < 0) { requestAnimationFrame(animate); return; } // still in delay
+
+        ctx.clearRect(0, 0, lw, lh);
+
+        // Dim ambient stars background
+        for (const s of ambientStars) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r * 0.6, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          ctx.fill();
+        }
+
+        if (elapsed < ROCKET_DUR) {
+          // === PHASE 1: ROCKET RISE ===
+          const t = Math.min(1, elapsed / ROCKET_DUR);
+          const rocketY = rocketStartY + (rocketTargetY - rocketStartY) * easeOut(t);
+
+          // Spawn flames
+          for (let i = 0; i < 4; i++) {
+            flames.push(new FlameParticle(rocketX, rocketY + rocketSize / 2 + 10));
+          }
+
+          // Update & draw flames
+          for (let i = flames.length - 1; i >= 0; i--) {
+            flames[i].update();
+            flames[i].draw(ctx);
+            if (flames[i].life <= 0) flames.splice(i, 1);
+          }
+
+          // Draw rocket emoji
+          ctx.font = `${rocketSize}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.save();
+          ctx.translate(rocketX, rocketY);
+          ctx.rotate(-Math.PI / 4);
+          ctx.fillText('🚀', 0, 0);
+          ctx.restore();
+
+          // Glow around rocket
+          const grd = ctx.createRadialGradient(rocketX, rocketY, 0, rocketX, rocketY, 120);
+          grd.addColorStop(0, `rgba(0, 240, 255, ${0.1 + t * 0.15})`);
+          grd.addColorStop(1, 'rgba(0, 240, 255, 0)');
+          ctx.fillStyle = grd;
+          ctx.fillRect(rocketX - 120, rocketY - 120, 240, 240);
+
+        } else if (elapsed < ROCKET_DUR + WARP_DUR) {
+          // === PHASE 2: STARFIELD WARP ===
+          const warpElapsed = elapsed - ROCKET_DUR;
+          const wt = warpElapsed / WARP_DUR;
+
+          // Draw warp stars
+          for (const star of warpStars) {
+            star.update();
+            star.draw(ctx);
+          }
+
+          // Remaining flames fade out
+          for (let i = flames.length - 1; i >= 0; i--) {
+            flames[i].update();
+            flames[i].draw(ctx);
+            if (flames[i].life <= 0) flames.splice(i, 1);
+          }
+
+          // Rocket shrinks into warp
+          if (wt < 0.3) {
+            const scale = 1 - wt / 0.3;
+            ctx.globalAlpha = scale;
+            ctx.font = `${rocketSize * scale}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.save();
+            ctx.translate(rocketX, rocketTargetY - warpElapsed * 0.3);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillText('🚀', 0, 0);
+            ctx.restore();
+            ctx.globalAlpha = 1;
+          }
+
+          // Center glow intensifies
+          const glowIntensity = wt * 0.35;
+          const grd = ctx.createRadialGradient(lw/2, lh/2, 0, lw/2, lh/2, Math.min(lw, lh) * 0.4);
+          grd.addColorStop(0, `rgba(0, 240, 255, ${glowIntensity})`);
+          grd.addColorStop(0.5, `rgba(180, 74, 255, ${glowIntensity * 0.5})`);
+          grd.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = grd;
+          ctx.fillRect(0, 0, lw, lh);
+
+        } else if (elapsed < ROCKET_DUR + WARP_DUR + FLASH_DUR) {
+          // === PHASE 3: WHITE FLASH ===
+          const flashT = (elapsed - ROCKET_DUR - WARP_DUR) / FLASH_DUR;
+
+          // Still draw fading warp stars
+          for (const star of warpStars) {
+            star.update();
+            star.draw(ctx);
+          }
+
+          // White flash
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, flashT * 1.5)})`;
+          ctx.fillRect(0, 0, lw, lh);
+
+        } else {
+          // === DONE: Fade out landing overlay ===
+          landing.classList.add('fade-out');
+          setTimeout(() => { landing.remove(); }, 900);
+          return;
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      requestAnimationFrame(animate);
+    };
   })();
   </script>
 
