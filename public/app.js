@@ -252,9 +252,55 @@ async function fetchSounds(filters) {
   }
 }
 
+function isTikTokLink(str) {
+  return /tiktok\.com/i.test(str.trim());
+}
+
+function parseTikTokLink(url) {
+  url = url.trim();
+  // Extract sound name from URL like: /music/SoundName-123456
+  const musicMatch = url.match(/\/music\/([^?#]+)/);
+  if (musicMatch) {
+    // "SoundName-123456" → "SoundName" (remove trailing ID)
+    let raw = decodeURIComponent(musicMatch[1]);
+    raw = raw.replace(/-\d+$/, "").replace(/-/g, " ");
+    return { name: raw, link: url };
+  }
+  // Fallback: just use the URL
+  return { name: "TikTok Sound", link: url };
+}
+
 function onSearchInput() {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
+    const query = searchInput.value.trim();
+
+    // Detect TikTok link
+    if (isTikTokLink(query)) {
+      const parsed = parseTikTokLink(query);
+      // Create a manual sound entry for this link
+      const manualSound = {
+        tiktok_name_of_sound: parsed.name,
+        tiktok_sound_creator_name: "Unknown Artist",
+        tiktok_official_link: parsed.link,
+        tiktok_image_url: "",
+        tiktok_last_24_hours_video_percentage: null,
+        tiktok_last_24_hours_video_count: "",
+        tiktok_last_7_days_video_count: "",
+        tiktok_total_video_count: "",
+        label_name: "",
+        _isManualLink: true,
+      };
+      // Check if this link matches any already-loaded sound
+      const match = allSounds.find(s =>
+        s.tiktok_official_link && parsed.link.includes(s.tiktok_official_link.replace(/^https?:\/\//, ""))
+      );
+      filteredSounds = match ? [match] : [manualSound];
+      renderSounds();
+      return;
+    }
+
+    // Normal text search
     if (allSounds.length > 0) {
       const filters = getFilterValues();
       filteredSounds = clientSideFilter(allSounds, filters);
@@ -295,6 +341,7 @@ function renderSounds() {
     const videos7d = s.tiktok_last_7_days_video_count ?? "";
     const totalVideos = s.tiktok_total_video_count ?? "";
     const label = s.label_name || "";
+    const isManual = s._isManualLink;
 
     const growthNum = parseFloat(growth24h);
     const growthDisplay = !isNaN(growthNum)
@@ -306,6 +353,28 @@ function renderSounds() {
     const imgTag = artwork
       ? `<img class="sound-artwork" src="${escHtml(artwork)}" alt="" onerror="this.style.display='none'">`
       : `<div class="sound-artwork"></div>`;
+
+    // For manual link entries, show editable name/artist fields
+    if (isManual) {
+      return `
+        <div class="sound-card manual-card">
+          <span class="sound-rank">&#128279;</span>
+          <div class="sound-artwork"></div>
+          <div class="sound-info" style="flex:1">
+            <label class="manual-label">Sound Name</label>
+            <input class="manual-input" id="manual-name-${i}" value="${escHtml(name)}" placeholder="Sound name...">
+            <label class="manual-label" style="margin-top:8px">Artist Name</label>
+            <input class="manual-input" id="manual-artist-${i}" value="${escHtml(artist === 'Unknown Artist' ? '' : artist)}" placeholder="Artist name...">
+            <div style="margin-top:6px">
+              <a href="${escHtml(tiktokLink)}" target="_blank" rel="noopener" class="manual-link">Open on TikTok &#8599;</a>
+            </div>
+          </div>
+          <div class="sound-actions">
+            <button class="outreach-btn" onclick="outreachManual(${i})">Outreach</button>
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div class="sound-card">
@@ -333,6 +402,31 @@ function renderSounds() {
 }
 
 // ============ DROPDOWN & OUTREACH ============
+
+function outreachManual(index) {
+  // Update the manual sound entry with user-edited values
+  const nameEl = document.getElementById(`manual-name-${index}`);
+  const artistEl = document.getElementById(`manual-artist-${index}`);
+  if (nameEl) filteredSounds[index].tiktok_name_of_sound = nameEl.value || "Unknown Sound";
+  if (artistEl) filteredSounds[index].tiktok_sound_creator_name = artistEl.value || "Unknown Artist";
+
+  // Show global dropdown near the outreach button
+  const btn = event.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  globalDropdown.hidden = false;
+  activeDropdownIndex = index;
+
+  const ddHeight = globalDropdown.offsetHeight;
+  if (rect.top > ddHeight + 8) {
+    globalDropdown.style.top = (rect.top - ddHeight - 4) + "px";
+  } else {
+    globalDropdown.style.top = (rect.bottom + 4) + "px";
+  }
+  const ddWidth = globalDropdown.offsetWidth;
+  let left = rect.right - ddWidth;
+  if (left < 8) left = 8;
+  globalDropdown.style.left = left + "px";
+}
 
 function toggleDropdown(e, index) {
   e.stopPropagation();

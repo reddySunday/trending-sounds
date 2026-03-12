@@ -712,6 +712,55 @@ header h1 {
   text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
 }
 
+/* Manual link card */
+.manual-card {
+  border-color: rgba(180, 74, 255, 0.25);
+}
+
+.manual-label {
+  display: block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--purple);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.manual-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.manual-input:focus {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.manual-input::placeholder {
+  color: var(--text-dim);
+}
+
+.manual-link {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.manual-link:hover {
+  text-decoration: underline;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
 .sound-actions {
   flex-shrink: 0;
 }
