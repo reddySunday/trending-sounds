@@ -1,0 +1,13 @@
+{
+  "name": "trending-sounds",
+  "version": "1.0.0",
+  "description": "Top 10 trending unsigned sounds from Chartex",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

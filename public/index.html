@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trending Sounds</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Animated background -->
+  <canvas id="bg-canvas"></canvas>
+  <div class="scanlines"></div>
+
+  <div id="app">
+    <!-- Main page: trending sounds list -->
+    <div id="page-list">
+      <header>
+        <h1>Trending Sounds</h1>
+        <p class="subtitle" id="results-subtitle">Discover trending TikTok sounds</p>
+      </header>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-top">
+          <div class="search-box">
+            <input type="text" id="search-input" placeholder="Search sounds..." oninput="onSearchInput()">
+          </div>
+          <select id="sort-select" onchange="applyFilters()">
+            <option value="tiktok_last_24_hours_video_count">Sort: 24h Creates</option>
+            <option value="tiktok_last_24_hours_video_percentage">Sort: 24h Growth %</option>
+            <option value="tiktok_last_7_days_video_count">Sort: 7d Creates</option>
+            <option value="tiktok_total_video_count">Sort: Total Creates</option>
+          </select>
+          <button class="filter-toggle" onclick="toggleFilters()">
+            <span>Filters</span>
+            <span id="filter-count" class="filter-count" hidden></span>
+            <span id="filter-arrow" class="filter-arrow">&#9660;</span>
+          </button>
+        </div>
+
+        <div id="filter-panel" class="filter-panel" hidden>
+          <div class="filter-section">
+            <label class="filter-heading">Label Type</label>
+            <div class="label-toggles" id="label-toggles">
+              <button class="label-btn active" data-label="OTHERS" onclick="toggleLabel(this)">Unsigned</button>
+              <button class="label-btn" data-label="UMG" onclick="toggleLabel(this)">Universal</button>
+              <button class="label-btn" data-label="SMG" onclick="toggleLabel(this)">Sony</button>
+              <button class="label-btn" data-label="WMG" onclick="toggleLabel(this)">Warner</button>
+              <button class="label-btn" data-label="BMG" onclick="toggleLabel(this)">BMG</button>
+              <button class="label-btn" data-label="BIG_INDIE" onclick="toggleLabel(this)">Big Indie</button>
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <label class="filter-heading">Country</label>
+            <select id="country-select" class="filter-select">
+              <option value="">Worldwide</option>
+              <optgroup label="Americas">
+                <option value="US">United States</option>
+                <option value="BR">Brazil</option>
+                <option value="CA">Canada</option>
+                <option value="MX">Mexico</option>
+                <option value="AR">Argentina</option>
+                <option value="CO">Colombia</option>
+                <option value="CL">Chile</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="GB">United Kingdom</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="ES">Spain</option>
+                <option value="IT">Italy</option>
+                <option value="NL">Netherlands</option>
+                <option value="BE">Belgium</option>
+                <option value="AT">Austria</option>
+                <option value="CH">Switzerland</option>
+                <option value="PT">Portugal</option>
+                <option value="PL">Poland</option>
+                <option value="SE">Sweden</option>
+                <option value="NO">Norway</option>
+                <option value="DK">Denmark</option>
+                <option value="FI">Finland</option>
+                <option value="IE">Ireland</option>
+                <option value="CZ">Czech Republic</option>
+                <option value="RO">Romania</option>
+                <option value="HU">Hungary</option>
+                <option value="GR">Greece</option>
+                <option value="BG">Bulgaria</option>
+                <option value="HR">Croatia</option>
+                <option value="SK">Slovakia</option>
+                <option value="SI">Slovenia</option>
+                <option value="LT">Lithuania</option>
+                <option value="LV">Latvia</option>
+                <option value="EE">Estonia</option>
+              </optgroup>
+              <optgroup label="Asia Pacific">
+                <option value="AU">Australia</option>
+                <option value="NZ">New Zealand</option>
+                <option value="JP">Japan</option>
+                <option value="KR">South Korea</option>
+                <option value="IN">India</option>
+                <option value="ID">Indonesia</option>
+                <option value="TH">Thailand</option>
+                <option value="PH">Philippines</option>
+                <option value="MY">Malaysia</option>
+                <option value="SG">Singapore</option>
+                <option value="VN">Vietnam</option>
+                <option value="TW">Taiwan</option>
+              </optgroup>
+              <optgroup label="Middle East &amp; Africa">
+                <option value="SA">Saudi Arabia</option>
+                <option value="AE">UAE</option>
+                <option value="TR">Turkey</option>
+                <option value="EG">Egypt</option>
+                <option value="ZA">South Africa</option>
+                <option value="NG">Nigeria</option>
+                <option value="IL">Israel</option>
+                <option value="KE">Kenya</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="filter-section">
+            <label class="filter-heading">Range Filters</label>
+            <div class="range-grid">
+              <div class="range-group">
+                <span class="range-label">24h Creates</span>
+                <div class="range-inputs">
+                  <input type="number" id="min-24h" placeholder="Min" min="0">
+                  <span class="range-sep">&ndash;</span>
+                  <input type="number" id="max-24h" placeholder="Max" min="0">
+                </div>
+              </div>
+              <div class="range-group">
+                <span class="range-label">24h Growth %</span>
+                <div class="range-inputs">
+                  <input type="number" id="min-growth" placeholder="Min" step="0.1">
+                  <span class="range-sep">&ndash;</span>
+                  <input type="number" id="max-growth" placeholder="Max" step="0.1">
+                </div>
+              </div>
+              <div class="range-group">
+                <span class="range-label">7d Creates</span>
+                <div class="range-inputs">
+                  <input type="number" id="min-7d" placeholder="Min" min="0">
+                  <span class="range-sep">&ndash;</span>
+                  <input type="number" id="max-7d" placeholder="Max" min="0">
+                </div>
+              </div>
+              <div class="range-group">
+                <span class="range-label">Total Creates</span>
+                <div class="range-inputs">
+                  <input type="number" id="min-total" placeholder="Min" min="0">
+                  <span class="range-sep">&ndash;</span>
+                  <input type="number" id="max-total" placeholder="Max" min="0">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <label class="filter-heading">Results</label>
+            <div class="display-toggles">
+              <button class="display-btn active" data-count="10" onclick="setDisplayCount(this)">10</button>
+              <button class="display-btn" data-count="25" onclick="setDisplayCount(this)">25</button>
+              <button class="display-btn" data-count="50" onclick="setDisplayCount(this)">50</button>
+            </div>
+          </div>
+
+          <div class="filter-actions">
+            <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+            <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading trending sounds...</p>
+      </div>
+
+      <div id="error" class="error" hidden>
+        <p id="error-msg"></p>
+        <button onclick="applyFilters()">Retry</button>
+      </div>
+
+      <p id="results-count" class="results-count" hidden></p>
+      <div id="sounds-list" class="sounds-list" hidden></div>
+    </div>
+
+    <!-- Outreach page -->
+    <div id="page-outreach" hidden>
+      <header>
+        <button class="back-btn" onclick="showList()">&larr; Back</button>
+        <h1>Outreach Message</h1>
+        <p class="subtitle" id="outreach-subtitle"></p>
+      </header>
+
+      <div class="outreach-type-tabs">
+        <button class="tab active" data-type="email" onclick="switchTab('email')">Email</button>
+        <button class="tab" data-type="instagram" onclick="switchTab('instagram')">Instagram DM</button>
+      </div>
+
+      <div class="message-form">
+        <div id="email-fields">
+          <label for="email-subject">Subject</label>
+          <input type="text" id="email-subject" placeholder="Subject line...">
+        </div>
+
+        <label for="message-body">Message</label>
+        <textarea id="message-body" rows="12" placeholder="Your message..."></textarea>
+
+        <div class="actions">
+          <button class="btn btn-secondary" onclick="copyMessage()">Copy to Clipboard</button>
+          <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">Send via Email</button>
+        </div>
+        <p id="copy-feedback" class="feedback" hidden>Copied!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global outreach dropdown (outside all cards to avoid stacking context issues) -->
+  <div id="global-dropdown" class="global-dropdown" hidden>
+    <button id="gd-instagram">Instagram DM</button>
+    <button id="gd-email">Email</button>
+  </div>
+
+  <script src="/app.js"></script>
+
+  <!-- Particle network background -->
+  <script>
+  (function() {
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let w, h, particles, mouse;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+
+    mouse = { x: w / 2, y: h / 2 };
+    document.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+    class Particle {
+      constructor() { this.reset(); }
+      reset() {
+        this.x = Math.random() * w;
+        this.y = Math.random() * h;
+        this.vx = (Math.random() - 0.5) * 0.4;
+        this.vy = (Math.random() - 0.5) * 0.4;
+        this.r = Math.random() * 1.5 + 0.5;
+        // Random color: cyan or purple
+        this.hue = Math.random() > 0.5 ? 185 : 270;
+        this.alpha = Math.random() * 0.5 + 0.2;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 0 || this.x > w) this.vx *= -1;
+        if (this.y < 0 || this.y > h) this.vy *= -1;
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${this.hue}, 100%, 65%, ${this.alpha})`;
+        ctx.fill();
+      }
+    }
+
+    function init() {
+      resize();
+      const count = Math.min(Math.floor((w * h) / 8000), 150);
+      particles = Array.from({ length: count }, () => new Particle());
+    }
+
+    function drawConnections() {
+      const maxDist = 140;
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < maxDist) {
+            const alpha = (1 - dist / maxDist) * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `hsla(200, 100%, 60%, ${alpha})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+        // Mouse attraction lines
+        const dx = particles[i].x - mouse.x;
+        const dy = particles[i].y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 200) {
+          const alpha = (1 - dist / 200) * 0.25;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.strokeStyle = `hsla(270, 100%, 70%, ${alpha})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Floating grid
+    let gridOffset = 0;
+    function drawGrid() {
+      gridOffset += 0.15;
+      const spacing = 60;
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+      ctx.lineWidth = 0.5;
+      for (let x = (gridOffset % spacing); x < w; x += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = (gridOffset % spacing); y < h; y += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, w, h);
+      drawGrid();
+      particles.forEach(p => { p.update(); p.draw(); });
+      drawConnections();
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', () => { resize(); init(); });
+    init();
+    animate();
+  })();
+  </script>
+
+  <!-- Live reload -->
+  <script>
+    (function() {
+      let lastHash = null;
+      async function check() {
+        try {
+          const r = await fetch("/__livereload");
+          const d = await r.json();
+          if (lastHash && d.hash !== lastHash) location.reload();
+          lastHash = d.hash;
+        } catch {}
+      }
+      setInterval(check, 2000);
+      check();
+    })();
+  </script>
+</body>
+</html>

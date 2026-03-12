@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: trending-sounds
+    runtime: python
+    buildCommand: echo "No build needed"
+    startCommand: python3 server.py
+    envVars:
+      - key: CHARTEX_APP_ID
+        sync: false
+      - key: CHARTEX_APP_TOKEN
+        sync: false
