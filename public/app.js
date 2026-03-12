@@ -817,6 +817,8 @@ async function showDigest() {
   try {
     const resp = await fetch("/digest.json?t=" + Date.now());
     if (!resp.ok) throw new Error("No digest available yet. The daily digest runs at 9:00 AM.");
+    const contentType = resp.headers.get("content-type") || "";
+    if (!contentType.includes("json")) throw new Error("No digest available yet. The daily digest runs at 9:00 AM.");
     const data = await resp.json();
     digestDate.textContent = `Generated: ${data.generatedAt || "Unknown"}`;
 
