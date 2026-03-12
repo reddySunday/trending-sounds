@@ -411,31 +411,65 @@ function switchTab(type) {
   copyFeedback.hidden = true;
 }
 
+// ============ TEMPLATE SYSTEM ============
+
+const DEFAULT_TEMPLATES = {
+  ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
+  emailSubject: `{song} - SUNDAY / Sony Music`,
+  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
+};
+
+function getTemplates() {
+  try {
+    const saved = localStorage.getItem("outreach_templates");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { ...DEFAULT_TEMPLATES };
+}
+
+function showTemplateEditor() {
+  const tpl = getTemplates();
+  document.getElementById("tpl-ig").value = tpl.ig;
+  document.getElementById("tpl-email-subject").value = tpl.emailSubject;
+  document.getElementById("tpl-email-body").value = tpl.emailBody;
+  document.getElementById("template-editor").hidden = false;
+}
+
+function hideTemplateEditor() {
+  document.getElementById("template-editor").hidden = true;
+}
+
+function saveTemplates() {
+  const tpl = {
+    ig: document.getElementById("tpl-ig").value,
+    emailSubject: document.getElementById("tpl-email-subject").value,
+    emailBody: document.getElementById("tpl-email-body").value,
+  };
+  localStorage.setItem("outreach_templates", JSON.stringify(tpl));
+  const fb = document.getElementById("tpl-feedback");
+  fb.textContent = "Saved!";
+  fb.hidden = false;
+  setTimeout(() => { fb.hidden = true; }, 2000);
+}
+
+function resetTemplates() {
+  localStorage.removeItem("outreach_templates");
+  document.getElementById("tpl-ig").value = DEFAULT_TEMPLATES.ig;
+  document.getElementById("tpl-email-subject").value = DEFAULT_TEMPLATES.emailSubject;
+  document.getElementById("tpl-email-body").value = DEFAULT_TEMPLATES.emailBody;
+  const fb = document.getElementById("tpl-feedback");
+  fb.textContent = "Reset to defaults!";
+  fb.hidden = false;
+  setTimeout(() => { fb.hidden = true; }, 2000);
+}
+
 function fillTemplate(type, soundName, artistName) {
+  const tpl = getTemplates();
   if (type === "email") {
-    emailSubject.value = `${soundName} - SUNDAY / Sony Music`;
-    messageBody.value = `Hi ${artistName} & management,
-
-I hope you're well.
-
-My name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).
-
-I came across "${soundName}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.
-
-Is it independently released?
-I'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.
-
-Happy to set up a call to discuss further.
-
-Best,`;
+    emailSubject.value = tpl.emailSubject.replace(/\{artist\}/g, artistName).replace(/\{song\}/g, soundName);
+    messageBody.value = tpl.emailBody.replace(/\{artist\}/g, artistName).replace(/\{song\}/g, soundName);
   } else {
-    messageBody.value = `Hey ${artistName} - really excited about ${soundName}!
-I'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).
-
-Are you releasing independently?
-Would be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.
-
-- Oisín, A&R @ SUNDAY (+45 22560259)`;
+    messageBody.value = tpl.ig.replace(/\{artist\}/g, artistName).replace(/\{song\}/g, soundName);
   }
 }
 

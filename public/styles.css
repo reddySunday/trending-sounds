@@ -380,6 +380,132 @@ header h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* ============ QUICK ACTIONS BAR ============ */
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.action-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--glass);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(12px);
+}
+
+.action-link:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.action-icon {
+  font-size: 14px;
+}
+
+/* ============ TEMPLATE EDITOR ============ */
+.template-editor {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(16px);
+}
+
+.template-editor[hidden] {
+  display: none;
+}
+
+.template-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.template-editor-header h2 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cyan);
+}
+
+.close-editor {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.close-editor:hover {
+  color: var(--pink);
+}
+
+.template-section {
+  margin-bottom: 18px;
+}
+
+.template-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.template-hint code {
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--cyan);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+}
+
+.template-textarea,
+.template-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: "JetBrains Mono", monospace;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+}
+
+.template-textarea:focus,
+.template-input:focus {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.template-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* Results count */
 .results-count {
   font-family: "JetBrains Mono", monospace;
