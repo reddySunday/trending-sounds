@@ -131,15 +131,12 @@ function cyclePipelineStatus(index) {
 function syncPipelineToSheet(sound, status) {
   const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown";
   const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown";
-  const tiktokLink = sound.tiktok_official_link || "";
   fetch(SHEET_WEBHOOK, {
     method: "POST",
     body: JSON.stringify({
-      date: new Date().toLocaleDateString("en-US"),
+      action: "statusUpdate",
       soundName: name,
       artist: artist,
-      platform: "Status Update",
-      tiktokLink: tiktokLink,
       status: status,
     }),
   }).catch(() => {});
