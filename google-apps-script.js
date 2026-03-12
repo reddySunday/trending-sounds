@@ -26,6 +26,24 @@ function doPost(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  // Delete from log: remove all rows matching this artist+sound
+  if (data.action === "deleteFromLog") {
+    var lastRow = sheet.getLastRow();
+    var deleted = 0;
+    // Delete from bottom up so row indices don't shift
+    for (var i = lastRow; i >= 2; i--) {
+      var rowSound = sheet.getRange(i, 2).getValue();
+      var rowArtist = sheet.getRange(i, 3).getValue();
+      if (rowSound === data.soundName && rowArtist === data.artist) {
+        sheet.deleteRow(i);
+        deleted++;
+      }
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "ok", action: "deleted", count: deleted }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   // Normal outreach log: append a new row
   sheet.appendRow([
     data.date,

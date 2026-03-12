@@ -1062,6 +1062,29 @@ header h1 {
   gap: 6px;
 }
 
+.delete-log-btn {
+  background: none;
+  border: 1px solid rgba(255, 45, 149, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0.4;
+  line-height: 1;
+}
+
+.sound-card:hover .delete-log-btn {
+  opacity: 0.7;
+}
+
+.delete-log-btn:hover {
+  opacity: 1 !important;
+  background: rgba(255, 45, 149, 0.1);
+  border-color: var(--pink);
+  box-shadow: 0 0 10px rgba(255, 45, 149, 0.2);
+}
+
 /* ============ BATCH OUTREACH ============ */
 .sound-checkbox {
   appearance: none;

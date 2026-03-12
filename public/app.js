@@ -155,6 +155,33 @@ function syncPipelineToSheet(sound, status) {
   }).catch(() => {});
 }
 
+async function deleteFromLog(index) {
+  const toShow = getDisplaySounds();
+  const sound = toShow[index];
+  if (!sound) return;
+  const name = sound.tiktok_name_of_sound || sound.song_name || "Unknown";
+  const artist = sound.tiktok_sound_creator_name || sound.artists || "Unknown";
+  if (!confirm(`Delete all log entries for "${name}" by ${artist}?`)) return;
+
+  try {
+    const resp = await fetch(SHEET_WEBHOOK, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "deleteFromLog",
+        soundName: name,
+        artist: artist,
+      }),
+    });
+    const result = await resp.json();
+    // Also clear local pipeline status
+    const all = getAllPipelineStatuses();
+    const key = getPipelineKey(sound);
+    delete all[key];
+    localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    renderSounds();
+  } catch {}
+}
+
 function togglePipelineFilter(btn) {
   document.querySelectorAll(".pipeline-filter-btn").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
@@ -633,6 +660,7 @@ function renderSounds() {
           <div class="sound-actions">
             ${badgeHtml}
             <button class="outreach-btn" onclick="outreachManual(${i})">Outreach</button>
+            <button class="delete-log-btn" onclick="deleteFromLog(${i})" title="Delete from outreach log">&#128465;</button>
           </div>
         </div>`;
     }
@@ -657,6 +685,7 @@ function renderSounds() {
         <div class="sound-actions">
           ${badgeHtml}
           <button class="outreach-btn" onclick="toggleDropdown(event, ${i})">Outreach</button>
+          <button class="delete-log-btn" onclick="deleteFromLog(${i})" title="Delete from outreach log">&#128465;</button>
         </div>
       </div>`;
   }).join("");
