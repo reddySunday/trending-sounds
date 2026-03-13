@@ -788,99 +788,98 @@
       activeSources = [];
     }
 
-    // Slide 0: Low ambient drone — calm, mysterious
+    // Slide 0: Low ambient drone — calm, mysterious (5s)
     function playSlide0Sound() {
       const now = audioCtx.currentTime;
-      // Deep sub bass drone
       const osc1 = audioCtx.createOscillator();
       const g1 = audioCtx.createGain();
       osc1.type = 'sine';
       osc1.frequency.setValueAtTime(55, now);
-      osc1.frequency.linearRampToValueAtTime(58, now + 2);
+      osc1.frequency.linearRampToValueAtTime(60, now + 5);
       g1.gain.setValueAtTime(0, now);
       g1.gain.linearRampToValueAtTime(0.25, now + 0.8);
-      g1.gain.linearRampToValueAtTime(0.2, now + 2);
+      g1.gain.linearRampToValueAtTime(0.22, now + 3);
+      g1.gain.linearRampToValueAtTime(0.18, now + 5);
       osc1.connect(g1).connect(masterGain);
       osc1.start(now);
       osc1.gainNode = g1;
       activeSources.push(osc1);
 
-      // Soft shimmer pad
       const osc2 = audioCtx.createOscillator();
       const g2 = audioCtx.createGain();
       osc2.type = 'triangle';
       osc2.frequency.setValueAtTime(220, now);
+      osc2.frequency.linearRampToValueAtTime(227, now + 5);
       g2.gain.setValueAtTime(0, now);
       g2.gain.linearRampToValueAtTime(0.06, now + 1);
-      g2.gain.linearRampToValueAtTime(0.04, now + 2);
+      g2.gain.linearRampToValueAtTime(0.05, now + 3);
+      g2.gain.linearRampToValueAtTime(0.03, now + 5);
       osc2.connect(g2).connect(masterGain);
       osc2.start(now);
       osc2.gainNode = g2;
       activeSources.push(osc2);
     }
 
-    // Slide 1: Digital flicker — brief glitch hit
+    // Slide 1: Digital flicker — brief glitch hits (5s)
     function playSlide1Sound() {
       const now = audioCtx.currentTime;
-      // Continuing drone, slightly higher
       const osc1 = audioCtx.createOscillator();
       const g1 = audioCtx.createGain();
       osc1.type = 'sine';
       osc1.frequency.setValueAtTime(65, now);
+      osc1.frequency.linearRampToValueAtTime(70, now + 5);
       g1.gain.setValueAtTime(0, now);
       g1.gain.linearRampToValueAtTime(0.3, now + 0.3);
-      g1.gain.linearRampToValueAtTime(0.25, now + 2);
+      g1.gain.linearRampToValueAtTime(0.25, now + 5);
       osc1.connect(g1).connect(masterGain);
       osc1.start(now);
       osc1.gainNode = g1;
       activeSources.push(osc1);
 
-      // Brief noise burst (glitch hit)
-      const bufferSize = audioCtx.sampleRate * 0.15;
-      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-      const data = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
-      const noiseSrc = audioCtx.createBufferSource();
-      const ng = audioCtx.createGain();
-      const nf = audioCtx.createBiquadFilter();
-      nf.type = 'bandpass';
-      nf.frequency.value = 2000;
-      nf.Q.value = 2;
-      noiseSrc.buffer = noiseBuffer;
-      ng.gain.setValueAtTime(0.2, now + 0.5);
-      ng.gain.linearRampToValueAtTime(0, now + 0.7);
-      noiseSrc.connect(nf).connect(ng).connect(masterGain);
-      noiseSrc.start(now + 0.5);
-      noiseSrc.gainNode = ng;
-      activeSources.push(noiseSrc);
+      // Multiple glitch hits spread across 5s
+      [0.5, 1.8, 3.2, 4.1].forEach(t => {
+        const bufSize = audioCtx.sampleRate * 0.15;
+        const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+        const src = audioCtx.createBufferSource();
+        const ng = audioCtx.createGain();
+        const nf = audioCtx.createBiquadFilter();
+        nf.type = 'bandpass'; nf.frequency.value = 2000; nf.Q.value = 2;
+        src.buffer = buf;
+        ng.gain.setValueAtTime(0.2, now + t);
+        ng.gain.linearRampToValueAtTime(0, now + t + 0.2);
+        src.connect(nf).connect(ng).connect(masterGain);
+        src.start(now + t);
+        src.gainNode = ng;
+        activeSources.push(src);
+      });
     }
 
-    // Slide 2: Amber alert — warning tone + digital static
+    // Slide 2: Amber alert — warning tone + digital static (5s)
     function playSlide2Sound() {
       const now = audioCtx.currentTime;
-      // Tense mid-freq drone
       const osc1 = audioCtx.createOscillator();
       const g1 = audioCtx.createGain();
       osc1.type = 'sawtooth';
       osc1.frequency.setValueAtTime(80, now);
-      osc1.frequency.linearRampToValueAtTime(90, now + 2);
+      osc1.frequency.linearRampToValueAtTime(95, now + 5);
       g1.gain.setValueAtTime(0, now);
       g1.gain.linearRampToValueAtTime(0.12, now + 0.2);
-      g1.gain.linearRampToValueAtTime(0.1, now + 2);
+      g1.gain.linearRampToValueAtTime(0.1, now + 5);
       const lp = audioCtx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 400;
+      lp.type = 'lowpass'; lp.frequency.value = 400;
       osc1.connect(lp).connect(g1).connect(masterGain);
       osc1.start(now);
       osc1.gainNode = g1;
       activeSources.push(osc1);
 
-      // Warning ping (two-tone)
-      [0, 0.6].forEach((offset, idx) => {
+      // Repeating warning pings across 5s
+      [0, 0.7, 1.8, 2.5, 3.5, 4.2].forEach((offset, idx) => {
         const ping = audioCtx.createOscillator();
         const pg = audioCtx.createGain();
         ping.type = 'sine';
-        ping.frequency.value = idx === 0 ? 880 : 660;
+        ping.frequency.value = idx % 2 === 0 ? 880 : 660;
         pg.gain.setValueAtTime(0, now + offset);
         pg.gain.linearRampToValueAtTime(0.15, now + offset + 0.05);
         pg.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.3);
@@ -891,8 +890,8 @@
         activeSources.push(ping);
       });
 
-      // Static crackle
-      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      // Static crackle (5s buffer)
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
       const nd = nBuf.getChannelData(0);
       for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (Math.random() < 0.03 ? 1 : 0);
       const ns = audioCtx.createBufferSource();
@@ -905,10 +904,9 @@
       activeSources.push(ns);
     }
 
-    // Slide 3: Heavy distortion — pink noise wash + detuned dissonance
+    // Slide 3: Heavy distortion — pink noise wash + detuned dissonance (5s)
     function playSlide3Sound() {
       const now = audioCtx.currentTime;
-      // Dissonant chord (detuned oscillators)
       [73.4, 77.8, 116.5].forEach(freq => {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
@@ -916,39 +914,39 @@
         osc.frequency.value = freq;
         g.gain.setValueAtTime(0, now);
         g.gain.linearRampToValueAtTime(0.1, now + 0.3);
-        g.gain.linearRampToValueAtTime(0.08, now + 2);
+        g.gain.linearRampToValueAtTime(0.12, now + 3);
+        g.gain.linearRampToValueAtTime(0.08, now + 5);
         const lp = audioCtx.createBiquadFilter();
         lp.type = 'lowpass';
         lp.frequency.setValueAtTime(300, now);
-        lp.frequency.linearRampToValueAtTime(600, now + 2);
+        lp.frequency.linearRampToValueAtTime(800, now + 5);
         osc.connect(lp).connect(g).connect(masterGain);
         osc.start(now);
         osc.gainNode = g;
         activeSources.push(osc);
       });
 
-      // Heavy noise wash
-      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      // Noise wash (5s buffer)
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
       const nd = nBuf.getChannelData(0);
       for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
       const ns = audioCtx.createBufferSource();
       const nsg = audioCtx.createGain();
       const bp = audioCtx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = 800;
-      bp.Q.value = 0.8;
+      bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 0.8;
       ns.buffer = nBuf;
       nsg.gain.setValueAtTime(0, now);
       nsg.gain.linearRampToValueAtTime(0.12, now + 0.5);
-      nsg.gain.linearRampToValueAtTime(0.15, now + 2);
+      nsg.gain.linearRampToValueAtTime(0.18, now + 3);
+      nsg.gain.linearRampToValueAtTime(0.15, now + 5);
       ns.connect(bp).connect(nsg).connect(masterGain);
       ns.start(now);
       ns.gainNode = nsg;
       activeSources.push(ns);
 
-      // Glitch stutters (rapid short hits)
-      for (let i = 0; i < 4; i++) {
-        const t = 0.3 + i * 0.35;
+      // Glitch stutters spread across 5s
+      for (let i = 0; i < 8; i++) {
+        const t = 0.3 + i * 0.55;
         const click = audioCtx.createOscillator();
         const cg = audioCtx.createGain();
         click.type = 'square';
@@ -964,10 +962,10 @@
       }
     }
 
-    // Slide 4: Maximum chaos — sirens, harsh noise, distortion
+    // Slide 4: Maximum chaos — sirens, harsh noise, distortion (5s)
     function playSlide4Sound() {
       const now = audioCtx.currentTime;
-      // Alarm siren (sweeping)
+      // Alarm siren sweeping across full 5s
       const siren = audioCtx.createOscillator();
       const sg = audioCtx.createGain();
       siren.type = 'sawtooth';
@@ -976,18 +974,24 @@
       siren.frequency.linearRampToValueAtTime(300, now + 1.0);
       siren.frequency.linearRampToValueAtTime(900, now + 1.5);
       siren.frequency.linearRampToValueAtTime(300, now + 2.0);
+      siren.frequency.linearRampToValueAtTime(900, now + 2.5);
+      siren.frequency.linearRampToValueAtTime(300, now + 3.0);
+      siren.frequency.linearRampToValueAtTime(1000, now + 3.5);
+      siren.frequency.linearRampToValueAtTime(300, now + 4.0);
+      siren.frequency.linearRampToValueAtTime(1100, now + 4.5);
+      siren.frequency.linearRampToValueAtTime(400, now + 5.0);
       sg.gain.setValueAtTime(0, now);
       sg.gain.linearRampToValueAtTime(0.08, now + 0.1);
-      sg.gain.linearRampToValueAtTime(0.1, now + 2);
+      sg.gain.linearRampToValueAtTime(0.12, now + 3);
+      sg.gain.linearRampToValueAtTime(0.1, now + 5);
       const slp = audioCtx.createBiquadFilter();
-      slp.type = 'lowpass';
-      slp.frequency.value = 1500;
+      slp.type = 'lowpass'; slp.frequency.value = 1500;
       siren.connect(slp).connect(sg).connect(masterGain);
       siren.start(now);
       siren.gainNode = sg;
       activeSources.push(siren);
 
-      // Distorted bass — clipping via waveshaper
+      // Distorted bass
       const bass = audioCtx.createOscillator();
       const bg = audioCtx.createGain();
       const dist = audioCtx.createWaveShaper();
@@ -999,17 +1003,17 @@
       dist.curve = curve;
       bass.type = 'sawtooth';
       bass.frequency.setValueAtTime(40, now);
-      bass.frequency.linearRampToValueAtTime(55, now + 2);
+      bass.frequency.linearRampToValueAtTime(60, now + 5);
       bg.gain.setValueAtTime(0, now);
       bg.gain.linearRampToValueAtTime(0.35, now + 0.3);
-      bg.gain.linearRampToValueAtTime(0.3, now + 2);
+      bg.gain.linearRampToValueAtTime(0.3, now + 5);
       bass.connect(dist).connect(bg).connect(masterGain);
       bass.start(now);
       bass.gainNode = bg;
       activeSources.push(bass);
 
-      // Full-spectrum noise blast
-      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      // Full-spectrum noise blast (5s buffer)
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
       const nd = nBuf.getChannelData(0);
       for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
       const ns = audioCtx.createBufferSource();
@@ -1017,15 +1021,16 @@
       ns.buffer = nBuf;
       nsg.gain.setValueAtTime(0, now);
       nsg.gain.linearRampToValueAtTime(0.18, now + 0.3);
-      nsg.gain.linearRampToValueAtTime(0.22, now + 2);
+      nsg.gain.linearRampToValueAtTime(0.25, now + 3);
+      nsg.gain.linearRampToValueAtTime(0.22, now + 5);
       ns.connect(nsg).connect(masterGain);
       ns.start(now);
       ns.gainNode = nsg;
       activeSources.push(ns);
 
-      // Rapid glitch clicks
-      for (let i = 0; i < 8; i++) {
-        const t = Math.random() * 1.8;
+      // Rapid glitch clicks spread across 5s
+      for (let i = 0; i < 16; i++) {
+        const t = Math.random() * 4.5;
         const click = audioCtx.createOscillator();
         const cg = audioCtx.createGain();
         click.type = 'square';
@@ -1045,18 +1050,17 @@
     function playSlide5Sound() {
       stopAllSounds(0.08);  // Hard cut — snap to silence
       const now = audioCtx.currentTime;
-      // Single pure tone: breath of relief
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = 528;  // "healing frequency"
+      osc.frequency.value = 528;
       g.gain.setValueAtTime(0, now + 0.3);
-      g.gain.linearRampToValueAtTime(0.15, now + 0.6);
-      g.gain.linearRampToValueAtTime(0.12, now + 1.8);
-      g.gain.linearRampToValueAtTime(0, now + 2.5);
+      g.gain.linearRampToValueAtTime(0.15, now + 0.8);
+      g.gain.linearRampToValueAtTime(0.12, now + 2.0);
+      g.gain.linearRampToValueAtTime(0, now + 2.8);
       osc.connect(g).connect(masterGain);
       osc.start(now + 0.3);
-      osc.stop(now + 2.6);
+      osc.stop(now + 3.0);
       osc.gainNode = g;
       activeSources.push(osc);
     }
@@ -1218,7 +1222,7 @@
         handleSolutionSlide();
       } else if (currentSlide > 0 || audioActivated) {
         // Only auto-advance if audio is activated (slide 0 waits for click)
-        const delay = 2000;
+        const delay = 5000;
         autoTimer = setTimeout(() => advanceSlide(), delay);
       }
     }
@@ -1278,7 +1282,7 @@
       if (soundHint) soundHint.classList.add('hidden');
       // Play slide 0 sound, then start auto-advance
       if (audioCtx) slideSounds[0]();
-      autoTimer = setTimeout(() => advanceSlide(), 2000);
+      autoTimer = setTimeout(() => advanceSlide(), 5000);
     }
 
     // Events: click
