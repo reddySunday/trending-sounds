@@ -1442,6 +1442,29 @@ header h1 {
   border-color: rgba(0, 240, 255, 0.3);
 }
 
+/* ---- Sound hint ---- */
+#cascade-sound-hint {
+  position: fixed;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.05em;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#cascade-sound-hint.visible {
+  opacity: 1 !important;
+}
+
+#cascade-sound-hint.hidden {
+  display: none !important;
+}
+
 /* ---- Progress dots ---- */
 #cascade-progress {
   position: fixed;

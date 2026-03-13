@@ -47,6 +47,7 @@
       </div>
     </div>
 
+    <div id="cascade-sound-hint">🔊 click for sound</div>
     <button id="cascade-skip">SKIP &raquo;</button>
 
     <div id="cascade-progress">
@@ -1215,7 +1216,8 @@
 
       if (currentSlide === PAIN_SLIDES) {
         handleSolutionSlide();
-      } else {
+      } else if (currentSlide > 0 || audioActivated) {
+        // Only auto-advance if audio is activated (slide 0 waits for click)
         const delay = 2000;
         autoTimer = setTimeout(() => advanceSlide(), delay);
       }
@@ -1264,49 +1266,66 @@
       }, 900);
     }
 
-    // Events: click to advance
+    // Audio + auto-advance activation on first user interaction
+    let audioActivated = false;
+    const soundHint = document.getElementById('cascade-sound-hint');
+
+    function activateAndGo() {
+      if (audioActivated) return;
+      audioActivated = true;
+      initAudio();
+      // Hide the sound hint
+      if (soundHint) soundHint.classList.add('hidden');
+      // Play slide 0 sound, then start auto-advance
+      if (audioCtx) slideSounds[0]();
+      autoTimer = setTimeout(() => advanceSlide(), 2000);
+    }
+
+    // Events: click
     cascade.addEventListener('click', (e) => {
       if (e.target === skipBtn) return;
-      initAudio();
+      if (!audioActivated) { activateAndGo(); return; }
       advanceSlide();
     });
 
     // Keyboard: Space/Enter/→ advance, ← go back
     document.addEventListener('keydown', (e) => {
       if (!document.getElementById('problem-cascade')) return;
-      initAudio();
       if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
         e.preventDefault();
+        if (!audioActivated) { activateAndGo(); return; }
         advanceSlide();
       }
       if (e.key === 'ArrowLeft' && currentSlide > 0) {
+        if (!audioActivated) activateAndGo();
         e.preventDefault();
         transitioning = false;
         goToSlide(currentSlide - 1);
       }
     });
 
+    // Touch: same pattern
+    cascade.addEventListener('touchstart', (e) => {
+      if (e.target === skipBtn) return;
+      if (!audioActivated) activateAndGo();
+    }, { once: true });
+
     // Skip button
     skipBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(autoTimer);
-      stopAllSounds(0.1);
+      if (audioCtx) stopAllSounds(0.1);
       finishCascade();
     });
 
-    // Auto-init audio on first interaction (needed for browsers)
-    function autoInitAudio() {
-      initAudio();
-      // If already on a slide, start its sound
-      if (audioCtx && currentSlide >= 0 && currentSlide < slideSounds.length) {
-        slideSounds[currentSlide]();
-      }
-      cascade.removeEventListener('touchstart', autoInitAudio);
-    }
-    cascade.addEventListener('touchstart', autoInitAudio, { once: true });
-
-    // Start: small delay then show first slide
-    setTimeout(() => { goToSlide(0); }, 800);
+    // Start: show first slide (paused — no auto-advance until user clicks)
+    setTimeout(() => {
+      goToSlide(0);
+      // Show sound hint after first slide appears
+      setTimeout(() => {
+        if (soundHint && !audioActivated) soundHint.classList.add('visible');
+      }, 800);
+    }, 800);
   })();
   </script>
 
