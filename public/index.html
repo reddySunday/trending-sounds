@@ -761,6 +761,307 @@
     let noiseIntensity = 0;
     let shakeAmount = 0;
 
+    // ─── WEB AUDIO: escalating sound design ───
+    let audioCtx = null;
+    let activeSources = [];
+    let masterGain = null;
+
+    function initAudio() {
+      if (audioCtx) return;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.35;
+      masterGain.connect(audioCtx.destination);
+    }
+
+    function stopAllSounds(fadeTime) {
+      const t = fadeTime || 0.3;
+      activeSources.forEach(src => {
+        try {
+          if (src.gainNode) {
+            src.gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + t);
+          }
+          setTimeout(() => { try { src.stop(); } catch(e){} }, t * 1000 + 50);
+        } catch(e) {}
+      });
+      activeSources = [];
+    }
+
+    // Slide 0: Low ambient drone — calm, mysterious
+    function playSlide0Sound() {
+      const now = audioCtx.currentTime;
+      // Deep sub bass drone
+      const osc1 = audioCtx.createOscillator();
+      const g1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(55, now);
+      osc1.frequency.linearRampToValueAtTime(58, now + 2);
+      g1.gain.setValueAtTime(0, now);
+      g1.gain.linearRampToValueAtTime(0.25, now + 0.8);
+      g1.gain.linearRampToValueAtTime(0.2, now + 2);
+      osc1.connect(g1).connect(masterGain);
+      osc1.start(now);
+      osc1.gainNode = g1;
+      activeSources.push(osc1);
+
+      // Soft shimmer pad
+      const osc2 = audioCtx.createOscillator();
+      const g2 = audioCtx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(220, now);
+      g2.gain.setValueAtTime(0, now);
+      g2.gain.linearRampToValueAtTime(0.06, now + 1);
+      g2.gain.linearRampToValueAtTime(0.04, now + 2);
+      osc2.connect(g2).connect(masterGain);
+      osc2.start(now);
+      osc2.gainNode = g2;
+      activeSources.push(osc2);
+    }
+
+    // Slide 1: Digital flicker — brief glitch hit
+    function playSlide1Sound() {
+      const now = audioCtx.currentTime;
+      // Continuing drone, slightly higher
+      const osc1 = audioCtx.createOscillator();
+      const g1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(65, now);
+      g1.gain.setValueAtTime(0, now);
+      g1.gain.linearRampToValueAtTime(0.3, now + 0.3);
+      g1.gain.linearRampToValueAtTime(0.25, now + 2);
+      osc1.connect(g1).connect(masterGain);
+      osc1.start(now);
+      osc1.gainNode = g1;
+      activeSources.push(osc1);
+
+      // Brief noise burst (glitch hit)
+      const bufferSize = audioCtx.sampleRate * 0.15;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+      const noiseSrc = audioCtx.createBufferSource();
+      const ng = audioCtx.createGain();
+      const nf = audioCtx.createBiquadFilter();
+      nf.type = 'bandpass';
+      nf.frequency.value = 2000;
+      nf.Q.value = 2;
+      noiseSrc.buffer = noiseBuffer;
+      ng.gain.setValueAtTime(0.2, now + 0.5);
+      ng.gain.linearRampToValueAtTime(0, now + 0.7);
+      noiseSrc.connect(nf).connect(ng).connect(masterGain);
+      noiseSrc.start(now + 0.5);
+      noiseSrc.gainNode = ng;
+      activeSources.push(noiseSrc);
+    }
+
+    // Slide 2: Amber alert — warning tone + digital static
+    function playSlide2Sound() {
+      const now = audioCtx.currentTime;
+      // Tense mid-freq drone
+      const osc1 = audioCtx.createOscillator();
+      const g1 = audioCtx.createGain();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(80, now);
+      osc1.frequency.linearRampToValueAtTime(90, now + 2);
+      g1.gain.setValueAtTime(0, now);
+      g1.gain.linearRampToValueAtTime(0.12, now + 0.2);
+      g1.gain.linearRampToValueAtTime(0.1, now + 2);
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 400;
+      osc1.connect(lp).connect(g1).connect(masterGain);
+      osc1.start(now);
+      osc1.gainNode = g1;
+      activeSources.push(osc1);
+
+      // Warning ping (two-tone)
+      [0, 0.6].forEach((offset, idx) => {
+        const ping = audioCtx.createOscillator();
+        const pg = audioCtx.createGain();
+        ping.type = 'sine';
+        ping.frequency.value = idx === 0 ? 880 : 660;
+        pg.gain.setValueAtTime(0, now + offset);
+        pg.gain.linearRampToValueAtTime(0.15, now + offset + 0.05);
+        pg.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.3);
+        ping.connect(pg).connect(masterGain);
+        ping.start(now + offset);
+        ping.stop(now + offset + 0.35);
+        ping.gainNode = pg;
+        activeSources.push(ping);
+      });
+
+      // Static crackle
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      const nd = nBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (Math.random() < 0.03 ? 1 : 0);
+      const ns = audioCtx.createBufferSource();
+      const nsg = audioCtx.createGain();
+      ns.buffer = nBuf;
+      nsg.gain.value = 0.08;
+      ns.connect(nsg).connect(masterGain);
+      ns.start(now);
+      ns.gainNode = nsg;
+      activeSources.push(ns);
+    }
+
+    // Slide 3: Heavy distortion — pink noise wash + detuned dissonance
+    function playSlide3Sound() {
+      const now = audioCtx.currentTime;
+      // Dissonant chord (detuned oscillators)
+      [73.4, 77.8, 116.5].forEach(freq => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.1, now + 0.3);
+        g.gain.linearRampToValueAtTime(0.08, now + 2);
+        const lp = audioCtx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(300, now);
+        lp.frequency.linearRampToValueAtTime(600, now + 2);
+        osc.connect(lp).connect(g).connect(masterGain);
+        osc.start(now);
+        osc.gainNode = g;
+        activeSources.push(osc);
+      });
+
+      // Heavy noise wash
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      const nd = nBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
+      const ns = audioCtx.createBufferSource();
+      const nsg = audioCtx.createGain();
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 800;
+      bp.Q.value = 0.8;
+      ns.buffer = nBuf;
+      nsg.gain.setValueAtTime(0, now);
+      nsg.gain.linearRampToValueAtTime(0.12, now + 0.5);
+      nsg.gain.linearRampToValueAtTime(0.15, now + 2);
+      ns.connect(bp).connect(nsg).connect(masterGain);
+      ns.start(now);
+      ns.gainNode = nsg;
+      activeSources.push(ns);
+
+      // Glitch stutters (rapid short hits)
+      for (let i = 0; i < 4; i++) {
+        const t = 0.3 + i * 0.35;
+        const click = audioCtx.createOscillator();
+        const cg = audioCtx.createGain();
+        click.type = 'square';
+        click.frequency.value = 150 + Math.random() * 200;
+        cg.gain.setValueAtTime(0, now + t);
+        cg.gain.linearRampToValueAtTime(0.18, now + t + 0.01);
+        cg.gain.exponentialRampToValueAtTime(0.001, now + t + 0.06);
+        click.connect(cg).connect(masterGain);
+        click.start(now + t);
+        click.stop(now + t + 0.08);
+        click.gainNode = cg;
+        activeSources.push(click);
+      }
+    }
+
+    // Slide 4: Maximum chaos — sirens, harsh noise, distortion
+    function playSlide4Sound() {
+      const now = audioCtx.currentTime;
+      // Alarm siren (sweeping)
+      const siren = audioCtx.createOscillator();
+      const sg = audioCtx.createGain();
+      siren.type = 'sawtooth';
+      siren.frequency.setValueAtTime(300, now);
+      siren.frequency.linearRampToValueAtTime(900, now + 0.5);
+      siren.frequency.linearRampToValueAtTime(300, now + 1.0);
+      siren.frequency.linearRampToValueAtTime(900, now + 1.5);
+      siren.frequency.linearRampToValueAtTime(300, now + 2.0);
+      sg.gain.setValueAtTime(0, now);
+      sg.gain.linearRampToValueAtTime(0.08, now + 0.1);
+      sg.gain.linearRampToValueAtTime(0.1, now + 2);
+      const slp = audioCtx.createBiquadFilter();
+      slp.type = 'lowpass';
+      slp.frequency.value = 1500;
+      siren.connect(slp).connect(sg).connect(masterGain);
+      siren.start(now);
+      siren.gainNode = sg;
+      activeSources.push(siren);
+
+      // Distorted bass — clipping via waveshaper
+      const bass = audioCtx.createOscillator();
+      const bg = audioCtx.createGain();
+      const dist = audioCtx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 128) - 1;
+        curve[i] = (Math.PI + 4) * x / (Math.PI + 4 * Math.abs(x));
+      }
+      dist.curve = curve;
+      bass.type = 'sawtooth';
+      bass.frequency.setValueAtTime(40, now);
+      bass.frequency.linearRampToValueAtTime(55, now + 2);
+      bg.gain.setValueAtTime(0, now);
+      bg.gain.linearRampToValueAtTime(0.35, now + 0.3);
+      bg.gain.linearRampToValueAtTime(0.3, now + 2);
+      bass.connect(dist).connect(bg).connect(masterGain);
+      bass.start(now);
+      bass.gainNode = bg;
+      activeSources.push(bass);
+
+      // Full-spectrum noise blast
+      const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+      const nd = nBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
+      const ns = audioCtx.createBufferSource();
+      const nsg = audioCtx.createGain();
+      ns.buffer = nBuf;
+      nsg.gain.setValueAtTime(0, now);
+      nsg.gain.linearRampToValueAtTime(0.18, now + 0.3);
+      nsg.gain.linearRampToValueAtTime(0.22, now + 2);
+      ns.connect(nsg).connect(masterGain);
+      ns.start(now);
+      ns.gainNode = nsg;
+      activeSources.push(ns);
+
+      // Rapid glitch clicks
+      for (let i = 0; i < 8; i++) {
+        const t = Math.random() * 1.8;
+        const click = audioCtx.createOscillator();
+        const cg = audioCtx.createGain();
+        click.type = 'square';
+        click.frequency.value = 100 + Math.random() * 500;
+        cg.gain.setValueAtTime(0, now + t);
+        cg.gain.linearRampToValueAtTime(0.2, now + t + 0.005);
+        cg.gain.exponentialRampToValueAtTime(0.001, now + t + 0.04);
+        click.connect(cg).connect(masterGain);
+        click.start(now + t);
+        click.stop(now + t + 0.06);
+        click.gainNode = cg;
+        activeSources.push(click);
+      }
+    }
+
+    // Slide 5: Dead silence — one clean tone, then nothing
+    function playSlide5Sound() {
+      stopAllSounds(0.08);  // Hard cut — snap to silence
+      const now = audioCtx.currentTime;
+      // Single pure tone: breath of relief
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 528;  // "healing frequency"
+      g.gain.setValueAtTime(0, now + 0.3);
+      g.gain.linearRampToValueAtTime(0.15, now + 0.6);
+      g.gain.linearRampToValueAtTime(0.12, now + 1.8);
+      g.gain.linearRampToValueAtTime(0, now + 2.5);
+      osc.connect(g).connect(masterGain);
+      osc.start(now + 0.3);
+      osc.stop(now + 2.6);
+      osc.gainNode = g;
+      activeSources.push(osc);
+    }
+
+    const slideSounds = [playSlide0Sound, playSlide1Sound, playSlide2Sound, playSlide3Sound, playSlide4Sound, playSlide5Sound];
+
     function resizeCascadeCanvas() {
       cw = cascadeCanvas.width = window.innerWidth;
       ch = cascadeCanvas.height = window.innerHeight;
@@ -887,6 +1188,12 @@
       // Set visual intensity
       setIntensity(currentSlide);
 
+      // Play slide sound
+      if (audioCtx) {
+        if (currentSlide !== 5) stopAllSounds(0.15);
+        slideSounds[currentSlide]();
+      }
+
       // Activate new slide
       slides[currentSlide].classList.add('active');
 
@@ -909,7 +1216,7 @@
       if (currentSlide === PAIN_SLIDES) {
         handleSolutionSlide();
       } else {
-        const delay = currentSlide === 0 ? 4000 : 3500;
+        const delay = 2000;
         autoTimer = setTimeout(() => advanceSlide(), delay);
       }
     }
@@ -948,20 +1255,26 @@
 
     function finishCascade() {
       cascadeAnimating = false;
+      if (audioCtx) stopAllSounds(0.5);
       cascade.classList.add('finished');
       cascade.style.transform = '';
-      setTimeout(() => { cascade.remove(); }, 900);
+      setTimeout(() => {
+        cascade.remove();
+        if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      }, 900);
     }
 
     // Events: click to advance
     cascade.addEventListener('click', (e) => {
       if (e.target === skipBtn) return;
+      initAudio();
       advanceSlide();
     });
 
     // Keyboard: Space/Enter/→ advance, ← go back
     document.addEventListener('keydown', (e) => {
       if (!document.getElementById('problem-cascade')) return;
+      initAudio();
       if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
         e.preventDefault();
         advanceSlide();
@@ -977,8 +1290,20 @@
     skipBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       clearTimeout(autoTimer);
+      stopAllSounds(0.1);
       finishCascade();
     });
+
+    // Auto-init audio on first interaction (needed for browsers)
+    function autoInitAudio() {
+      initAudio();
+      // If already on a slide, start its sound
+      if (audioCtx && currentSlide >= 0 && currentSlide < slideSounds.length) {
+        slideSounds[currentSlide]();
+      }
+      cascade.removeEventListener('touchstart', autoInitAudio);
+    }
+    cascade.addEventListener('touchstart', autoInitAudio, { once: true });
 
     // Start: small delay then show first slide
     setTimeout(() => { goToSlide(0); }, 800);
