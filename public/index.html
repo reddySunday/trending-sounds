@@ -7,6 +7,57 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- Problem Cascade overlay — sits above #landing -->
+  <div id="problem-cascade">
+    <canvas id="cascade-canvas"></canvas>
+
+    <div id="cascade-content">
+      <div class="cascade-slide" data-index="0">
+        <span class="cascade-label">// CURRENT_WORKFLOW</span>
+        <h2 class="cascade-text">Hours spent scouting trending sounds.</h2>
+        <span class="cascade-sub">Manually. Every. Single. Day.</span>
+      </div>
+
+      <div class="cascade-slide" data-index="1">
+        <span class="cascade-label">// OUTREACH_STATUS</span>
+        <h2 class="cascade-text">One artist at a time.</h2>
+        <span class="cascade-sub">Copy. Paste. Repeat. Pray.</span>
+      </div>
+
+      <div class="cascade-slide" data-index="2">
+        <span class="cascade-label">// SYSTEM_LOAD: CRITICAL</span>
+        <h2 class="cascade-text">TikTok. Email. Instagram. Sheets.</h2>
+        <span class="cascade-sub">12 tabs. Zero clarity.</span>
+      </div>
+
+      <div class="cascade-slide" data-index="3">
+        <span class="cascade-label">// AUTOMATION: NULL</span>
+        <h2 class="cascade-text">Everything is manual.</h2>
+        <span class="cascade-sub">No pipeline. No system. No edge.</span>
+      </div>
+
+      <div class="cascade-slide" data-index="4">
+        <span class="cascade-label">// DATA_INTEGRITY: FAILING</span>
+        <h2 class="cascade-text">A Google Sheet held together by hope.</h2>
+        <span class="cascade-sub">Links rot. Status stales. Deals slip.</span>
+      </div>
+
+      <div class="cascade-slide cascade-solution" data-index="5">
+        <h2 class="cascade-text cascade-solution-text">What if it wasn't?</h2>
+      </div>
+    </div>
+
+    <button id="cascade-skip">SKIP &raquo;</button>
+
+    <div id="cascade-progress">
+      <span class="cascade-dot active"></span>
+      <span class="cascade-dot"></span>
+      <span class="cascade-dot"></span>
+      <span class="cascade-dot"></span>
+      <span class="cascade-dot"></span>
+    </div>
+  </div>
+
   <!-- Landing page overlay -->
   <div id="landing">
     <canvas id="launch-canvas"></canvas>
@@ -684,6 +735,253 @@
 
       requestAnimationFrame(animate);
     };
+  })();
+  </script>
+
+  <!-- Problem Cascade animation -->
+  <script>
+  (function() {
+    const cascade = document.getElementById('problem-cascade');
+    if (!cascade) return;
+
+    const cascadeCanvas = document.getElementById('cascade-canvas');
+    const cCtx = cascadeCanvas.getContext('2d');
+    const slides = cascade.querySelectorAll('.cascade-slide');
+    const dots = cascade.querySelectorAll('.cascade-dot');
+    const skipBtn = document.getElementById('cascade-skip');
+    const totalSlides = slides.length;
+    const PAIN_SLIDES = 5;
+
+    let cw, ch;
+    let currentSlide = -1;
+    let transitioning = false;
+    let autoTimer = null;
+    let glitchParticles = [];
+    let redOverlayAlpha = 0;
+    let noiseIntensity = 0;
+    let shakeAmount = 0;
+
+    function resizeCascadeCanvas() {
+      cw = cascadeCanvas.width = window.innerWidth;
+      ch = cascadeCanvas.height = window.innerHeight;
+    }
+    resizeCascadeCanvas();
+    window.addEventListener('resize', resizeCascadeCanvas);
+
+    // Glitch particle: colored horizontal bar
+    class GlitchParticle {
+      constructor() { this.reset(); }
+      reset() {
+        this.x = Math.random() * cw;
+        this.y = Math.random() * ch;
+        this.w = Math.random() * 200 + 20;
+        this.h = Math.random() * 4 + 1;
+        this.alpha = Math.random() * 0.3;
+        this.life = Math.random() * 20 + 5;
+        this.maxLife = this.life;
+        const hues = [185, 330, 0];
+        this.hue = hues[Math.floor(Math.random() * hues.length)];
+      }
+      update() {
+        this.life--;
+        if (this.life <= 0) this.reset();
+      }
+      draw(ctx) {
+        const fadeAlpha = this.alpha * (this.life / this.maxLife);
+        ctx.fillStyle = `hsla(${this.hue}, 100%, 60%, ${fadeAlpha})`;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+      }
+    }
+
+    // Sparse pixel noise
+    function drawNoise(ctx, intensity) {
+      if (intensity <= 0) return;
+      const imageData = ctx.createImageData(cw, ch);
+      const data = imageData.data;
+      const pixelCount = Math.floor(cw * ch * intensity * 0.02);
+      for (let i = 0; i < pixelCount; i++) {
+        const idx = Math.floor(Math.random() * cw * ch) * 4;
+        const brightness = Math.random() * 255;
+        data[idx] = brightness;
+        data[idx + 1] = brightness;
+        data[idx + 2] = brightness;
+        data[idx + 3] = Math.random() * 40 * intensity;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // Horizontal glitch scan lines
+    function drawGlitchLines(ctx, intensity) {
+      if (intensity <= 0) return;
+      const lineCount = Math.floor(intensity * 8);
+      for (let i = 0; i < lineCount; i++) {
+        const y = Math.random() * ch;
+        const h = Math.random() * 3 + 1;
+        const offset = (Math.random() - 0.5) * intensity * 40;
+        ctx.save();
+        ctx.translate(offset, 0);
+        ctx.fillStyle = `rgba(0, 240, 255, ${Math.random() * 0.1 * intensity})`;
+        ctx.fillRect(0, y, cw, h);
+        ctx.restore();
+      }
+    }
+
+    // Red warning vignette
+    function drawRedOverlay(ctx, alpha) {
+      if (alpha <= 0) return;
+      ctx.fillStyle = `rgba(255, 0, 0, ${alpha * 0.05})`;
+      ctx.fillRect(0, 0, cw, ch);
+      const gradient = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw, ch) * 0.3,
+                                                 cw/2, ch/2, Math.min(cw, ch) * 0.8);
+      gradient.addColorStop(0, 'transparent');
+      gradient.addColorStop(1, `rgba(255, 0, 0, ${alpha * 0.12})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+
+    // Screen shake via CSS transform
+    function applyShake() {
+      if (shakeAmount <= 0) {
+        cascade.style.transform = '';
+        return;
+      }
+      const x = (Math.random() - 0.5) * shakeAmount;
+      const y = (Math.random() - 0.5) * shakeAmount;
+      cascade.style.transform = `translate(${x}px, ${y}px)`;
+    }
+
+    // Main canvas render loop
+    let cascadeAnimating = true;
+    function renderCascade() {
+      if (!cascadeAnimating) return;
+      cCtx.clearRect(0, 0, cw, ch);
+      glitchParticles.forEach(p => { p.update(); p.draw(cCtx); });
+      drawNoise(cCtx, noiseIntensity);
+      drawGlitchLines(cCtx, noiseIntensity);
+      drawRedOverlay(cCtx, redOverlayAlpha);
+      applyShake();
+      requestAnimationFrame(renderCascade);
+    }
+    renderCascade();
+
+    // Slide transition
+    function goToSlide(index) {
+      if (transitioning || index === currentSlide || index >= totalSlides) return;
+      transitioning = true;
+      clearTimeout(autoTimer);
+
+      // Deactivate current slide
+      if (currentSlide >= 0) {
+        slides[currentSlide].classList.remove('active', 'cascade-glitch', 'cascade-glitch-heavy');
+      }
+
+      currentSlide = index;
+
+      // Update progress dots
+      dots.forEach((dot, i) => {
+        dot.classList.remove('active', 'past');
+        if (i < currentSlide) dot.classList.add('past');
+        if (i === currentSlide && currentSlide < PAIN_SLIDES) dot.classList.add('active');
+      });
+
+      // Set visual intensity
+      setIntensity(currentSlide);
+
+      // Activate new slide
+      slides[currentSlide].classList.add('active');
+
+      // Apply glitch classes based on escalation
+      if (currentSlide === 1) {
+        setTimeout(() => {
+          slides[currentSlide].classList.add('cascade-glitch');
+          setTimeout(() => {
+            if (currentSlide === 1) slides[currentSlide].classList.remove('cascade-glitch');
+          }, 400);
+        }, 600);
+      } else if (currentSlide === 2) {
+        setTimeout(() => { slides[currentSlide].classList.add('cascade-glitch'); }, 400);
+      } else if (currentSlide >= 3 && currentSlide <= 4) {
+        slides[currentSlide].classList.add('cascade-glitch-heavy');
+      }
+
+      setTimeout(() => { transitioning = false; }, 800);
+
+      if (currentSlide === PAIN_SLIDES) {
+        handleSolutionSlide();
+      } else {
+        const delay = currentSlide === 0 ? 4000 : 3500;
+        autoTimer = setTimeout(() => advanceSlide(), delay);
+      }
+    }
+
+    function advanceSlide() {
+      if (currentSlide < totalSlides - 1) {
+        goToSlide(currentSlide + 1);
+      }
+    }
+
+    // Escalation intensity
+    function setIntensity(slideIndex) {
+      const intensityMap = [
+        { particles: 0,   noise: 0,    red: 0,    shake: 0   },
+        { particles: 5,   noise: 0.15, red: 0,    shake: 0   },
+        { particles: 15,  noise: 0.35, red: 0.3,  shake: 1   },
+        { particles: 30,  noise: 0.6,  red: 0.6,  shake: 3   },
+        { particles: 50,  noise: 1.0,  red: 1.0,  shake: 6   },
+        { particles: 0,   noise: 0,    red: 0,    shake: 0   },
+      ];
+
+      const config = intensityMap[Math.min(slideIndex, intensityMap.length - 1)];
+      while (glitchParticles.length < config.particles) glitchParticles.push(new GlitchParticle());
+      while (glitchParticles.length > config.particles) glitchParticles.pop();
+      noiseIntensity = config.noise;
+      redOverlayAlpha = config.red;
+      shakeAmount = config.shake;
+    }
+
+    // Solution slide: clean snap, then transition out
+    function handleSolutionSlide() {
+      skipBtn.style.display = 'none';
+      document.getElementById('cascade-progress').style.display = 'none';
+      setTimeout(() => { finishCascade(); }, 2500);
+    }
+
+    function finishCascade() {
+      cascadeAnimating = false;
+      cascade.classList.add('finished');
+      cascade.style.transform = '';
+      setTimeout(() => { cascade.remove(); }, 900);
+    }
+
+    // Events: click to advance
+    cascade.addEventListener('click', (e) => {
+      if (e.target === skipBtn) return;
+      advanceSlide();
+    });
+
+    // Keyboard: Space/Enter/→ advance, ← go back
+    document.addEventListener('keydown', (e) => {
+      if (!document.getElementById('problem-cascade')) return;
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        advanceSlide();
+      }
+      if (e.key === 'ArrowLeft' && currentSlide > 0) {
+        e.preventDefault();
+        transitioning = false;
+        goToSlide(currentSlide - 1);
+      }
+    });
+
+    // Skip button
+    skipBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearTimeout(autoTimer);
+      finishCascade();
+    });
+
+    // Start: small delay then show first slide
+    setTimeout(() => { goToSlide(0); }, 800);
   })();
   </script>
 
