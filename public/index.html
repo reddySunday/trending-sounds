@@ -7,13 +7,119 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- Top nav -->
+  <nav class="top-nav">
+    <div class="nav-brand">SUNDAY A&amp;R</div>
+    <div class="nav-links">
+      <button class="nav-btn active" data-page="dashboard" onclick="showDashboard()">Dashboard</button>
+      <button class="nav-btn" data-page="crm" onclick="showCRM()">Outreach Log</button>
+      <button class="nav-btn" data-page="discover" onclick="showDiscover()">Discover</button>
+    </div>
+  </nav>
+
   <!-- Animated background -->
   <canvas id="bg-canvas"></canvas>
   <div class="scanlines"></div>
 
   <div id="app">
+
+    <!-- ===== DASHBOARD PAGE ===== -->
+    <div id="page-dashboard">
+      <header>
+        <h1>Outreach Dashboard</h1>
+        <p class="subtitle" id="dashboard-subtitle">Your A&amp;R pipeline at a glance</p>
+      </header>
+
+      <!-- Pipeline stats -->
+      <div class="dashboard-stats" id="dashboard-stats">
+        <!-- rendered by JS -->
+      </div>
+
+      <!-- Quick Add -->
+      <div class="quick-add-section">
+        <div class="quick-add-label">// QUICK ADD ARTIST</div>
+        <div class="quick-add-input-row">
+          <input type="text" id="quick-add-input" placeholder="Paste a Spotify or TikTok link…" oninput="onQuickAddInput()">
+          <button class="btn btn-primary quick-add-btn" onclick="handleQuickAdd()">Add</button>
+        </div>
+        <div id="quick-add-status" class="quick-add-status"></div>
+        <!-- Inline form after fetch -->
+        <div id="quick-add-form" hidden>
+          <div class="quick-add-fields">
+            <div class="qaf-field">
+              <label class="qaf-label">Artist</label>
+              <input type="text" id="qaf-artist" class="qaf-input" placeholder="Artist name">
+            </div>
+            <div class="qaf-field">
+              <label class="qaf-label">Song</label>
+              <input type="text" id="qaf-song" class="qaf-input" placeholder="Song / sound name">
+            </div>
+          </div>
+          <div class="quick-add-form-links">
+            <span id="qaf-link-display" class="qaf-link-display"></span>
+          </div>
+          <div class="quick-add-form-actions">
+            <button class="btn btn-primary" onclick="submitQuickAdd()">Add to Pipeline</button>
+            <button class="btn btn-secondary" onclick="cancelQuickAdd()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="recent-activity-section">
+        <div class="section-label">// RECENT ACTIVITY</div>
+        <div id="recent-activity" class="recent-activity">
+          <!-- rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== OUTREACH LOG / CRM PAGE ===== -->
+    <div id="page-crm" hidden>
+      <header>
+        <h1>Outreach Log</h1>
+        <p class="subtitle" id="crm-subtitle">All tracked artists</p>
+      </header>
+
+      <!-- CRM filter bar -->
+      <div class="crm-filter-bar">
+        <div class="pipeline-toggles" id="crm-pipeline-toggles">
+          <button class="pipeline-filter-btn active" data-pipeline="all" onclick="setCRMFilter(this)">All</button>
+          <button class="pipeline-filter-btn" data-pipeline="new" onclick="setCRMFilter(this)">New</button>
+          <button class="pipeline-filter-btn" data-pipeline="contacted" onclick="setCRMFilter(this)">Contacted</button>
+          <button class="pipeline-filter-btn" data-pipeline="replied" onclick="setCRMFilter(this)">Replied</button>
+          <button class="pipeline-filter-btn" data-pipeline="meeting" onclick="setCRMFilter(this)">Meeting</button>
+          <button class="pipeline-filter-btn" data-pipeline="signed" onclick="setCRMFilter(this)">Signed</button>
+          <button class="pipeline-filter-btn" data-pipeline="passed" onclick="setCRMFilter(this)">Passed</button>
+        </div>
+        <button class="btn btn-primary crm-add-btn" onclick="showDashboard(); setTimeout(()=>document.getElementById('quick-add-input').focus(),200)">+ Add Artist</button>
+      </div>
+
+      <!-- CRM table -->
+      <div class="crm-table-wrap">
+        <table class="crm-table" id="crm-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Artist</th>
+              <th>Song</th>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Links</th>
+              <th>Follow-up</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="crm-table-body">
+            <!-- rendered by JS -->
+          </tbody>
+        </table>
+        <p id="crm-empty" class="crm-empty" hidden>No entries yet. Add an artist from the Dashboard.</p>
+      </div>
+    </div>
+
     <!-- Main page: trending sounds list -->
-    <div id="page-list">
+    <div id="page-list" hidden>
       <header>
         <h1>Trending Sounds</h1>
         <p class="subtitle" id="results-subtitle">Discover trending TikTok sounds</p>

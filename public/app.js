@@ -30,6 +30,10 @@ let batchMode = false;
 let batchIgQueue = [];
 let batchIgIndex = 0;
 
+// CRM state
+let activeCRMFilter = "all";
+let quickAddPendingData = null; // { artist, songName, tiktokLink, spotifyLink }
+
 // ============ DOM REFS ============
 const pageList = document.getElementById("page-list");
 const pageOutreach = document.getElementById("page-outreach");
@@ -77,6 +81,412 @@ gdEmail.addEventListener("click", () => {
   if (activeDropdownIndex !== null) openOutreach(activeDropdownIndex, "email");
 });
 
+// ============ NAVIGATION ============
+
+const ALL_PAGES = ["page-dashboard", "page-crm", "page-list", "page-outreach", "page-digest"];
+
+function showPage(pageId) {
+  ALL_PAGES.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = id !== pageId;
+  });
+}
+
+function updateNav(activePage) {
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.page === activePage);
+  });
+}
+
+function showDashboard() {
+  showPage("page-dashboard");
+  updateNav("dashboard");
+  updateDashboard();
+}
+
+function showCRM() {
+  showPage("page-crm");
+  updateNav("crm");
+  renderCRMTable();
+  updateCRMSubtitle();
+}
+
+function showDiscover() {
+  showPage("page-list");
+  updateNav("discover");
+  if (allSounds.length === 0) applyFilters();
+}
+
+function showList() {
+  // Kept for compatibility — back button from outreach/digest goes to Discover
+  showPage("page-list");
+  updateNav("discover");
+}
+
+// ============ DASHBOARD ============
+
+function updateDashboard() {
+  loadDashboardStats();
+  renderRecentActivity();
+}
+
+function loadDashboardStats() {
+  const all = getAllPipelineStatuses();
+  const counts = {};
+  PIPELINE_STAGES.forEach(s => { counts[s.key] = 0; });
+  Object.values(all).forEach(entry => {
+    const s = entry.status || "new";
+    if (counts[s] !== undefined) counts[s]++;
+  });
+
+  const container = document.getElementById("dashboard-stats");
+  if (!container) return;
+  container.innerHTML = PIPELINE_STAGES.map(stage => `
+    <div class="stat-chip" style="--chip-color: ${stage.color}" onclick="showCRM(); setTimeout(()=>setCRMFilterByKey('${stage.key}'),50)">
+      <span class="stat-chip-count">${counts[stage.key]}</span>
+      <span class="stat-chip-label">${stage.label}</span>
+    </div>
+  `).join("");
+}
+
+function renderRecentActivity() {
+  const all = getAllPipelineStatuses();
+  const entries = Object.entries(all)
+    .map(([key, val]) => ({ key, ...val }))
+    .sort((a, b) => (b.updatedAt || b.dateAdded || "").localeCompare(a.updatedAt || a.dateAdded || ""))
+    .slice(0, 10);
+
+  const container = document.getElementById("recent-activity");
+  if (!container) return;
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="activity-empty">No activity yet. Add your first artist below.</p>';
+    return;
+  }
+
+  container.innerHTML = entries.map(entry => {
+    const [keyArtist, keySong] = entry.key.split("|||");
+    const artist = entry.artist || keyArtist || "Unknown";
+    const song = entry.songName || keySong || "Unknown";
+    const stage = PIPELINE_STAGES.find(s => s.key === (entry.status || "new")) || PIPELINE_STAGES[0];
+    const timeStr = entry.updatedAt ? timeAgo(entry.updatedAt) : "";
+    return `
+      <div class="activity-row">
+        <span class="activity-artist">${escHtml(artist)}</span>
+        <span class="activity-song">${escHtml(song)}</span>
+        <span class="activity-badge" style="color:${stage.color};border-color:${stage.color}30">${stage.label}</span>
+        ${timeStr ? `<span class="activity-time">${timeStr}</span>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function timeAgo(isoString) {
+  if (!isoString) return "";
+  const diff = Date.now() - new Date(isoString).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+// ============ QUICK ADD ============
+
+let _quickAddUrl = "";
+
+function onQuickAddInput() {
+  // Reset form if user clears/changes the input
+  const val = document.getElementById("quick-add-input").value.trim();
+  if (!val) {
+    document.getElementById("quick-add-form").hidden = true;
+    setQuickAddStatus("", "");
+    quickAddPendingData = null;
+  }
+}
+
+async function handleQuickAdd() {
+  const input = document.getElementById("quick-add-input");
+  const url = input.value.trim();
+  if (!url) return;
+
+  _quickAddUrl = url;
+  setQuickAddStatus("Fetching…", "loading");
+  document.getElementById("quick-add-form").hidden = true;
+  quickAddPendingData = null;
+
+  const isSpotify = /spotify\.com/i.test(url);
+  const isTikTok = /tiktok\.com/i.test(url);
+
+  if (isSpotify) {
+    await fetchSpotifyQuickAdd(url);
+  } else if (isTikTok) {
+    fetchTikTokQuickAdd(url);
+  } else {
+    // Unknown URL or plain text — just open the form empty
+    showQuickAddForm({ artist: "", songName: "", tiktokLink: "", spotifyLink: "" });
+    setQuickAddStatus("", "");
+  }
+}
+
+async function fetchSpotifyQuickAdd(url) {
+  try {
+    const resp = await fetch(`/api/spotify-track?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    showQuickAddForm({
+      artist: data.artist || "",
+      songName: data.trackName || "",
+      spotifyLink: url,
+      tiktokLink: "",
+    });
+    setQuickAddStatus("Spotify track found", "success");
+  } catch {
+    // Graceful fallback — open blank form
+    showQuickAddForm({ artist: "", songName: "", spotifyLink: url, tiktokLink: "" });
+    setQuickAddStatus("Could not auto-fetch — fill in manually", "error");
+  }
+}
+
+function fetchTikTokQuickAdd(url) {
+  const parsed = parseTikTokLink(url);
+  showQuickAddForm({
+    artist: "",
+    songName: parsed.name !== "TikTok Sound" ? parsed.name : "",
+    tiktokLink: url,
+    spotifyLink: "",
+  });
+  setQuickAddStatus("TikTok link detected", "success");
+}
+
+function showQuickAddForm(data) {
+  quickAddPendingData = data;
+  document.getElementById("qaf-artist").value = data.artist || "";
+  document.getElementById("qaf-song").value = data.songName || "";
+  const linkDisplay = document.getElementById("qaf-link-display");
+  const link = data.spotifyLink || data.tiktokLink || "";
+  linkDisplay.textContent = link ? `Link: ${link}` : "";
+  document.getElementById("quick-add-form").hidden = false;
+}
+
+function cancelQuickAdd() {
+  document.getElementById("quick-add-form").hidden = true;
+  document.getElementById("quick-add-input").value = "";
+  setQuickAddStatus("", "");
+  quickAddPendingData = null;
+}
+
+function submitQuickAdd() {
+  const artist = document.getElementById("qaf-artist").value.trim();
+  const songName = document.getElementById("qaf-song").value.trim();
+  if (!artist && !songName) {
+    setQuickAddStatus("Please enter at least an artist or song name", "error");
+    return;
+  }
+
+  const finalArtist = artist || "Unknown Artist";
+  const finalSong = songName || "Unknown Sound";
+  const tiktokLink = quickAddPendingData?.tiktokLink || "";
+  const spotifyLink = quickAddPendingData?.spotifyLink || "";
+
+  addToPipeline(finalArtist, finalSong, tiktokLink, spotifyLink);
+  setQuickAddStatus(`✓ ${finalArtist} — ${finalSong} added`, "success");
+  cancelQuickAdd();
+  setTimeout(updateDashboard, 100);
+}
+
+function addToPipeline(artist, songName, tiktokLink, spotifyLink) {
+  const all = getAllPipelineStatuses();
+  const key = `${artist}|||${songName}`;
+  const existing = all[key] || {};
+  all[key] = {
+    status: existing.status || "new",
+    updatedAt: new Date().toISOString(),
+    dateAdded: existing.dateAdded || new Date().toISOString(),
+    artist,
+    songName,
+    tiktokLink: tiktokLink || existing.tiktokLink || null,
+    spotifyLink: spotifyLink || existing.spotifyLink || null,
+    platform: existing.platform || null,
+    followUpDate: existing.followUpDate || null,
+  };
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({
+      date: new Date().toLocaleDateString("en-US"),
+      soundName: songName,
+      artist,
+      platform: "",
+      tiktokLink: tiktokLink || "",
+      spotifyLink: spotifyLink || "",
+      status: all[key].status,
+    }),
+  }).catch(() => {});
+}
+
+function setQuickAddStatus(msg, type) {
+  const el = document.getElementById("quick-add-status");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "quick-add-status" + (type ? ` ${type}` : "");
+}
+
+// ============ CRM TABLE ============
+
+let _crmFilter = "all";
+
+function setCRMFilter(btn) {
+  document.querySelectorAll("#crm-pipeline-toggles .pipeline-filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _crmFilter = btn.dataset.pipeline;
+  renderCRMTable();
+}
+
+function setCRMFilterByKey(key) {
+  const btn = document.querySelector(`#crm-pipeline-toggles [data-pipeline="${key}"]`);
+  if (btn) setCRMFilter(btn);
+}
+
+function updateCRMSubtitle() {
+  const all = getAllPipelineStatuses();
+  const count = Object.keys(all).length;
+  const el = document.getElementById("crm-subtitle");
+  if (el) el.textContent = `${count} artist${count !== 1 ? "s" : ""} tracked`;
+}
+
+function renderCRMTable() {
+  const all = getAllPipelineStatuses();
+  let entries = Object.entries(all)
+    .map(([key, val]) => ({ key, ...val }))
+    .sort((a, b) => (b.dateAdded || b.updatedAt || "").localeCompare(a.dateAdded || a.updatedAt || ""));
+
+  if (_crmFilter !== "all") {
+    entries = entries.filter(e => (e.status || "new") === _crmFilter);
+  }
+
+  const empty = document.getElementById("crm-empty");
+  const table = document.getElementById("crm-table");
+  const tbody = document.getElementById("crm-table-body");
+
+  if (entries.length === 0) {
+    table.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  table.hidden = false;
+  empty.hidden = true;
+
+  tbody.innerHTML = entries.map(entry => {
+    const [keyArtist, keySong] = entry.key.split("|||");
+    const artist = entry.artist || keyArtist || "Unknown";
+    const song = entry.songName || keySong || "Unknown";
+    const platform = entry.platform || "";
+    const status = entry.status || "new";
+    const stage = PIPELINE_STAGES.find(s => s.key === status) || PIPELINE_STAGES[0];
+    const dateStr = entry.dateAdded
+      ? new Date(entry.dateAdded).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : (entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
+
+    const tiktokHtml = entry.tiktokLink
+      ? `<a class="crm-link" href="${escHtml(entry.tiktokLink)}" target="_blank" rel="noopener" title="TikTok">🎵</a>` : "";
+    const spotifyHtml = entry.spotifyLink
+      ? `<a class="crm-link" href="${escHtml(entry.spotifyLink)}" target="_blank" rel="noopener" title="Spotify">🟢</a>` : "";
+
+    const followUpVal = entry.followUpDate || "";
+    const followUpClass = followUpVal ? "crm-followup has-date" : "crm-followup";
+
+    const encodedKey = escHtml(entry.key);
+
+    return `<tr>
+      <td class="crm-date">${escHtml(dateStr)}</td>
+      <td class="crm-artist">${escHtml(artist)}</td>
+      <td class="crm-song">${escHtml(song)}</td>
+      <td class="crm-platform">${escHtml(platform)}</td>
+      <td>
+        <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange('${encodedKey}', this.value)">
+          ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
+        </select>
+      </td>
+      <td class="crm-links">${tiktokHtml}${spotifyHtml}</td>
+      <td>
+        <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
+          onchange="setFollowUpDate('${encodedKey}', this.value)"
+          onfocus="this.showPicker && this.showPicker()">
+      </td>
+      <td>
+        <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove">&#128465;</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  updateCRMSubtitle();
+}
+
+function crmStatusChange(key, newStatus) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  all[key] = { ...all[key], status: newStatus, updatedAt: new Date().toISOString() };
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  // Sync to sheet
+  const [keyArtist, keySong] = key.split("|||");
+  const artist = all[key].artist || keyArtist;
+  const soundName = all[key].songName || keySong;
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({ action: "statusUpdate", soundName, artist, status: newStatus }),
+  }).catch(() => {});
+  // Update status badge color
+  const stage = PIPELINE_STAGES.find(s => s.key === newStatus);
+  if (stage) {
+    const sel = document.activeElement;
+    if (sel && sel.classList.contains("pipeline-select")) {
+      sel.style.setProperty("--badge-color", stage.color);
+    }
+  }
+}
+
+function setFollowUpDate(key, date) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  all[key] = { ...all[key], followUpDate: date || null, updatedAt: new Date().toISOString() };
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  // Update class on the input
+  const inputs = document.querySelectorAll(".crm-followup");
+  // The value change already happened; just toggle the class via re-check
+  inputs.forEach(inp => {
+    inp.classList.toggle("has-date", !!inp.value);
+  });
+  // Sync to sheet
+  const [keyArtist, keySong] = key.split("|||");
+  const artist = all[key].artist || keyArtist;
+  const soundName = all[key].songName || keySong;
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({ action: "setFollowUpDate", soundName, artist, followUpDate: date || "" }),
+  }).catch(() => {});
+}
+
+async function crmDeleteEntry(key) {
+  const all = getAllPipelineStatuses();
+  const entry = all[key];
+  if (!entry) return;
+  const [keyArtist, keySong] = key.split("|||");
+  const artist = entry.artist || keyArtist;
+  const song = entry.songName || keySong;
+  if (!confirm(`Remove "${song}" by ${artist} from your pipeline?`)) return;
+  delete all[key];
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({ action: "deleteFromLog", soundName: song, artist }),
+  }).catch(() => {});
+  renderCRMTable();
+  loadDashboardStats();
+}
+
 // ============ RESEARCH HUB ============
 
 function buildResearchLinks(artist) {
@@ -109,10 +519,22 @@ function getPipelineStatus(sound) {
   return all[key]?.status || "new";
 }
 
-function setPipelineStatus(sound, status) {
+function setPipelineStatus(sound, status, extraData = {}) {
   const all = getAllPipelineStatuses();
   const key = getPipelineKey(sound);
-  all[key] = { status, updatedAt: new Date().toISOString() };
+  const existing = all[key] || {};
+  const artist = sound.tiktok_sound_creator_name || sound.artists || existing.artist || "Unknown";
+  const songName = sound.tiktok_name_of_sound || sound.song_name || existing.songName || "Unknown";
+  all[key] = {
+    ...existing,
+    status,
+    updatedAt: new Date().toISOString(),
+    dateAdded: existing.dateAdded || new Date().toISOString(),
+    artist,
+    songName,
+    tiktokLink: sound.tiktok_official_link || existing.tiktokLink || null,
+    ...extraData,
+  };
   localStorage.setItem("pipeline_statuses", JSON.stringify(all));
   syncPipelineToSheet(sound, status);
 }
@@ -952,9 +1374,17 @@ function logOutreach() {
   const platform = currentType === "email" ? "Email" : "IG";
   const status = getPipelineStatus(currentSound);
 
-  // Auto-advance to "contacted" if still "new"
+  // Auto-advance to "contacted" if still "new", and store platform
   if (status === "new") {
-    setPipelineStatus(currentSound, "contacted");
+    setPipelineStatus(currentSound, "contacted", { platform });
+  } else {
+    // Update platform in localStorage even if status doesn't change
+    const all = getAllPipelineStatuses();
+    const key = getPipelineKey(currentSound);
+    if (all[key]) {
+      all[key] = { ...all[key], platform, updatedAt: new Date().toISOString() };
+      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    }
   }
 
   fetch(SHEET_WEBHOOK, {
@@ -987,4 +1417,4 @@ function formatNum(n) {
 }
 
 // ============ INIT ============
-applyFilters();
+showDashboard();
