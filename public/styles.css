@@ -282,6 +282,88 @@ body {
   display: flex;
   gap: 10px;
   margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+/* Outreach inline section */
+.qaf-outreach {
+  margin-top: 18px;
+  border-top: 1px solid var(--card-border);
+  padding-top: 14px;
+}
+
+.qaf-outreach-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--purple);
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.qaf-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.qaf-tab {
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.qaf-tab:hover {
+  color: var(--text);
+  border-color: rgba(180, 74, 255, 0.4);
+}
+
+.qaf-tab.active {
+  color: var(--purple);
+  border-color: rgba(180, 74, 255, 0.5);
+  background: rgba(180, 74, 255, 0.08);
+}
+
+.qaf-textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: vertical;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+
+.qaf-textarea:focus {
+  outline: none;
+  border-color: rgba(180, 74, 255, 0.5);
+}
+
+.btn-ghost {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
 }
 
 /* Recent Activity */

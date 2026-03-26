@@ -33,6 +33,7 @@ let batchIgIndex = 0;
 // CRM state
 let activeCRMFilter = "all";
 let quickAddPendingData = null; // { artist, songName, tiktokLink, spotifyLink }
+let currentQAFTab = "email"; // "email" | "instagram" | "none"
 
 // ============ DOM REFS ============
 const pageList = document.getElementById("page-list");
@@ -267,7 +268,56 @@ function showQuickAddForm(data) {
   const linkDisplay = document.getElementById("qaf-link-display");
   const link = data.spotifyLink || data.tiktokLink || "";
   linkDisplay.textContent = link ? `Link: ${link}` : "";
+  // Reset tab to email and fill template
+  currentQAFTab = "email";
+  _applyQAFTab("email");
+  _fillQAFTemplate(data.artist || "", data.songName || "");
   document.getElementById("quick-add-form").hidden = false;
+}
+
+function switchQAFTab(type) {
+  currentQAFTab = type;
+  _applyQAFTab(type);
+  _fillQAFTemplate(
+    document.getElementById("qaf-artist").value.trim(),
+    document.getElementById("qaf-song").value.trim()
+  );
+}
+
+function _applyQAFTab(type) {
+  document.querySelectorAll(".qaf-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === type));
+  const fields = document.getElementById("qaf-outreach-fields");
+  const submitBtn = document.getElementById("qaf-submit-btn");
+  if (type === "none") {
+    fields.hidden = true;
+    submitBtn.textContent = "Add to Pipeline";
+  } else {
+    fields.hidden = false;
+    submitBtn.textContent = type === "email" ? "Add + Send Email" : "Add + Copy DM";
+    document.getElementById("qaf-contact-label").textContent = type === "email" ? "Email address" : "Instagram handle";
+    document.getElementById("qaf-contact").placeholder = type === "email" ? "artist@email.com" : "@artisthandle";
+    document.getElementById("qaf-subject-row").hidden = type === "instagram";
+  }
+}
+
+function _fillQAFTemplate(artist, song) {
+  if (currentQAFTab === "none") return;
+  const tpl = getTemplates();
+  const a = artist || "{artist}";
+  const s = song || "{song}";
+  if (currentQAFTab === "email") {
+    document.getElementById("qaf-subject").value = tpl.emailSubject.replace(/\{artist\}/g, a).replace(/\{song\}/g, s);
+    document.getElementById("qaf-message").value = tpl.emailBody.replace(/\{artist\}/g, a).replace(/\{song\}/g, s);
+  } else {
+    document.getElementById("qaf-message").value = tpl.ig.replace(/\{artist\}/g, a).replace(/\{song\}/g, s);
+  }
+}
+
+function refreshQAFTemplate() {
+  _fillQAFTemplate(
+    document.getElementById("qaf-artist").value.trim(),
+    document.getElementById("qaf-song").value.trim()
+  );
 }
 
 function cancelQuickAdd() {
@@ -277,7 +327,7 @@ function cancelQuickAdd() {
   quickAddPendingData = null;
 }
 
-function submitQuickAdd() {
+function submitQuickAdd(sendOutreach) {
   const artist = document.getElementById("qaf-artist").value.trim();
   const songName = document.getElementById("qaf-song").value.trim();
   if (!artist && !songName) {
@@ -291,7 +341,37 @@ function submitQuickAdd() {
   const spotifyLink = quickAddPendingData?.spotifyLink || "";
 
   addToPipeline(finalArtist, finalSong, tiktokLink, spotifyLink);
-  setQuickAddStatus(`✓ ${finalArtist} — ${finalSong} added`, "success");
+
+  if (sendOutreach && currentQAFTab !== "none") {
+    const message = document.getElementById("qaf-message").value;
+    const contact = document.getElementById("qaf-contact").value.trim();
+
+    if (currentQAFTab === "email") {
+      const subject = encodeURIComponent(document.getElementById("qaf-subject").value);
+      const body = encodeURIComponent(message);
+      const mailto = `mailto:${encodeURIComponent(contact)}?subject=${subject}&body=${body}`;
+      window.open(mailto, "_blank");
+      // Mark as contacted
+      const all = getAllPipelineStatuses();
+      const key = `${finalArtist}|||${finalSong}`;
+      if (all[key]) { all[key].status = "contacted"; all[key].updatedAt = new Date().toISOString(); }
+      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    } else if (currentQAFTab === "instagram") {
+      navigator.clipboard.writeText(message).then(() => {
+        if (contact) window.open(`https://www.instagram.com/${contact.replace(/^@/, "")}/`, "_blank");
+      });
+      // Mark as contacted
+      const all = getAllPipelineStatuses();
+      const key = `${finalArtist}|||${finalSong}`;
+      if (all[key]) { all[key].status = "contacted"; all[key].updatedAt = new Date().toISOString(); }
+      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    }
+
+    setQuickAddStatus(`✓ Added${currentQAFTab === "email" ? " — email client opened" : " — DM copied to clipboard"}`, "success");
+  } else {
+    setQuickAddStatus(`✓ ${finalArtist} — ${finalSong} added`, "success");
+  }
+
   cancelQuickAdd();
   setTimeout(updateDashboard, 100);
 }

@@ -48,19 +48,46 @@
           <div class="quick-add-fields">
             <div class="qaf-field">
               <label class="qaf-label">Artist</label>
-              <input type="text" id="qaf-artist" class="qaf-input" placeholder="Artist name">
+              <input type="text" id="qaf-artist" class="qaf-input" placeholder="Artist name" oninput="refreshQAFTemplate()">
             </div>
             <div class="qaf-field">
               <label class="qaf-label">Song</label>
-              <input type="text" id="qaf-song" class="qaf-input" placeholder="Song / sound name">
+              <input type="text" id="qaf-song" class="qaf-input" placeholder="Song / sound name" oninput="refreshQAFTemplate()">
             </div>
           </div>
           <div class="quick-add-form-links">
             <span id="qaf-link-display" class="qaf-link-display"></span>
           </div>
+
+          <!-- Outreach section -->
+          <div class="qaf-outreach">
+            <div class="qaf-outreach-label">// OUTREACH</div>
+            <div class="qaf-tabs">
+              <button class="qaf-tab active" data-tab="email" onclick="switchQAFTab('email')">Email</button>
+              <button class="qaf-tab" data-tab="instagram" onclick="switchQAFTab('instagram')">Instagram DM</button>
+              <button class="qaf-tab" data-tab="none" onclick="switchQAFTab('none')">Skip</button>
+            </div>
+
+            <div id="qaf-outreach-fields">
+              <div id="qaf-contact-row" class="qaf-field">
+                <label class="qaf-label" id="qaf-contact-label">Email address</label>
+                <input type="text" id="qaf-contact" class="qaf-input" placeholder="artist@email.com">
+              </div>
+              <div id="qaf-subject-row" class="qaf-field">
+                <label class="qaf-label">Subject</label>
+                <input type="text" id="qaf-subject" class="qaf-input">
+              </div>
+              <div class="qaf-field">
+                <label class="qaf-label">Message</label>
+                <textarea id="qaf-message" class="qaf-textarea" rows="7"></textarea>
+              </div>
+            </div>
+          </div>
+
           <div class="quick-add-form-actions">
-            <button class="btn btn-primary" onclick="submitQuickAdd()">Add to Pipeline</button>
-            <button class="btn btn-secondary" onclick="cancelQuickAdd()">Cancel</button>
+            <button class="btn btn-primary" id="qaf-submit-btn" onclick="submitQuickAdd(true)">Add + Send</button>
+            <button class="btn btn-secondary" onclick="submitQuickAdd(false)">Add Only</button>
+            <button class="btn btn-ghost" onclick="cancelQuickAdd()">Cancel</button>
           </div>
         </div>
       </div>
@@ -415,7 +442,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=3"></script>
 
   <!-- Particle network background -->
   <script>
