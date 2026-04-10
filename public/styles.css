@@ -568,6 +568,24 @@ body {
 
 .crm-delete-btn:hover { color: var(--pink); }
 
+.crm-add-link-btn {
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 1px 5px;
+  margin-left: 4px;
+  transition: all 0.2s;
+}
+
+.crm-add-link-btn:hover {
+  color: var(--cyan);
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
 .crm-empty {
   text-align: center;
   color: var(--text-dim);

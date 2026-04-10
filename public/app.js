@@ -349,8 +349,8 @@ function submitQuickAdd(sendOutreach) {
     if (currentQAFTab === "email") {
       const subject = encodeURIComponent(document.getElementById("qaf-subject").value);
       const body = encodeURIComponent(message);
-      const mailto = `mailto:${encodeURIComponent(contact)}?subject=${subject}&body=${body}`;
-      window.open(mailto, "_blank");
+      const to = encodeURIComponent(contact);
+      window.open(`https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${subject}&body=${body}`, "_blank");
       // Mark as contacted
       const all = getAllPipelineStatuses();
       const key = `${finalArtist}|||${finalSong}`;
@@ -490,7 +490,7 @@ function renderCRMTable() {
           ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
         </select>
       </td>
-      <td class="crm-links">${tiktokHtml}${spotifyHtml}</td>
+      <td class="crm-links">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></td>
       <td>
         <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
           onchange="setFollowUpDate('${encodedKey}', this.value)"
@@ -503,6 +503,25 @@ function renderCRMTable() {
   }).join("");
 
   updateCRMSubtitle();
+}
+
+function crmAddLink(key) {
+  const url = prompt("Paste a Spotify or TikTok link:");
+  if (!url || !url.trim()) return;
+  const link = url.trim();
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  if (/spotify\.com/i.test(link)) {
+    all[key].spotifyLink = link;
+  } else if (/tiktok\.com/i.test(link)) {
+    all[key].tiktokLink = link;
+  } else {
+    alert("Please paste a Spotify or TikTok link.");
+    return;
+  }
+  all[key].updatedAt = new Date().toISOString();
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  renderCRMTable();
 }
 
 function crmStatusChange(key, newStatus) {
@@ -1288,7 +1307,7 @@ function switchTab(type) {
 
 const DEFAULT_TEMPLATES = {
   ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
-  emailSubject: `{song} - SUNDAY / Sony Music`,
+  emailSubject: `{artist} x SUNDAY`,
   emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
 };
 
