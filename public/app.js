@@ -9,12 +9,12 @@ const RESEARCH_PLATFORMS = [
 ];
 
 const PIPELINE_STAGES = [
-  { key: 'new',       label: 'New',       color: '#6a7091' },
-  { key: 'contacted', label: 'Contacted', color: '#00f0ff' },
-  { key: 'replied',   label: 'Replied',   color: '#b44aff' },
-  { key: 'meeting',   label: 'Meeting',   color: '#ff9f1a' },
-  { key: 'signed',    label: 'Signed',    color: '#00ff88' },
-  { key: 'passed',    label: 'Passed',    color: '#ff2d95' },
+  { key: 'new',       label: 'New',       color: '#94a3b8' },
+  { key: 'contacted', label: 'Contacted', color: '#0ea5e9' },
+  { key: 'replied',   label: 'Replied',   color: '#8b5cf6' },
+  { key: 'meeting',   label: 'Meeting',   color: '#f59e0b' },
+  { key: 'signed',    label: 'Signed',    color: '#10b981' },
+  { key: 'passed',    label: 'Passed',    color: '#ef4444' },
 ];
 
 // ============ STATE ============
