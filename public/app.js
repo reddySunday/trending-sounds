@@ -1696,9 +1696,9 @@ function updateScoutingSubtitle(scouts) {
   if (el) el.textContent = `${scouts.length} scouts · ${active} active`;
 }
 
-// Approximate exchange rates relative to EUR
+// Exchange rates to EUR. FROM_EUR is derived as exact inverse to eliminate round-trip drift.
 const TO_EUR   = { EUR: 1, USD: 0.92, GBP: 1.17, DKK: 0.134 };
-const FROM_EUR = { EUR: 1, USD: 1.09, GBP: 0.855, DKK: 7.46 };
+const FROM_EUR = Object.fromEntries(Object.entries(TO_EUR).map(([c, r]) => [c, 1 / r]));
 const CUR_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" };
 
 // Format a number with dot as thousands separator (e.g. 1.200)
@@ -1732,11 +1732,12 @@ function renderScoutingStats(scouts) {
     ? Object.entries(currencyCount).sort((a, b) => b[1] - a[1])[0][0]
     : "EUR";
 
-  // Convert all amounts to mainCurrency
+  // Convert all amounts to mainCurrency; skip conversion if already in mainCurrency
   const totalConverted = allProjects.reduce((sum, p) => {
     const cur = p.currency || "EUR";
-    const inEUR = (Number(p.amount) || 0) * (TO_EUR[cur] || 1);
-    return sum + inEUR * (FROM_EUR[mainCurrency] || 1);
+    const amount = Number(p.amount) || 0;
+    if (cur === mainCurrency) return sum + amount;
+    return sum + amount * (TO_EUR[cur] || 1) * (FROM_EUR[mainCurrency] || 1);
   }, 0);
   const avg = dealCount > 0 ? totalConverted / dealCount : 0;
 
