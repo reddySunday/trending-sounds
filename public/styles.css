@@ -493,7 +493,7 @@ header h1 {
 }
 
 .crm-table th {
-  padding: 10px 14px;
+  padding: 9px 10px;
   text-align: left;
   font-size: 10px;
   font-weight: 700;
@@ -504,7 +504,7 @@ header h1 {
 }
 
 .crm-table td {
-  padding: 10px 14px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
   vertical-align: middle;
@@ -523,20 +523,24 @@ header h1 {
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
+  width: 60px;
 }
 
 .crm-artist {
   font-weight: 600;
+  width: 120px;
 }
 
 .crm-song {
   color: var(--text-dim);
   font-size: 12px;
+  width: 130px;
 }
 
 .crm-platform {
   font-size: 11px;
   color: var(--text-muted);
+  width: 70px;
 }
 
 .crm-links {
@@ -564,7 +568,7 @@ header h1 {
   padding: 4px 8px;
   outline: none;
   cursor: pointer;
-  width: 130px;
+  width: 110px;
   transition: border-color 0.15s;
 }
 
@@ -612,8 +616,8 @@ header h1 {
 }
 
 .crm-notes-cell {
-  width: 280px;
-  min-width: 200px;
+  width: auto;
+  min-width: 140px;
   cursor: pointer;
 }
 
