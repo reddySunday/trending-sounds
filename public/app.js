@@ -58,7 +58,7 @@ const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzPil5g2VOQnK0DBL
   ---- END APPS SCRIPT ----
 */
 const SCOUT_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1Xfkee4wTUvomkKVpdiN3Ly4JdHDzRJ3jfGVDZbmGNXc/export?format=csv";
-const SCOUT_WEBHOOK = "https://script.google.com/macros/s/AKfycbx0BFVsmpQezqP3TRywQOQyyHB-Fot-mxhJlKr5udFdctL22-ma57E41W5sjTsSc0sG/exec";
+const SCOUT_WEBHOOK = "https://script.google.com/macros/s/AKfycbz1aIv98_ES1kHW1Z22XR31ILZcBHlaBkiTBSnKXRGZFTz6Fh2jkEMDLRLeRtuNoeI/exec";
 
 // ============ CONSTANTS ============
 
@@ -2076,7 +2076,9 @@ function submitLogProject() {
 
   const projects = getScoutingProjects();
   if (!projects[scout]) projects[scout] = [];
-  projects[scout].push({ projectName, currency, amount, date, notes });
+  // _synced:true marks this project as already sent to the sheet so
+  // syncAllToSheet() won't duplicate it on the next bulk sync
+  projects[scout].push({ projectName, currency, amount, date, notes, _synced: true });
   setScoutingProjects(projects);
 
   // Expand the scout row after logging
@@ -2094,6 +2096,75 @@ function submitLogProject() {
   const scouts = getScoutsCache();
   renderScoutingTable(scouts);
   renderScoutingStats(scouts);
+}
+
+// ─── Bulk sync: push all localStorage data → Google Sheet ────────────────────
+// Scouts  : sends syncScout (update-or-insert full row) for every scout.
+// Projects: sends addProject only for entries not yet marked _synced:true.
+// Safe to run multiple times — scouts are idempotent, projects skip duplicates.
+async function syncAllToSheet() {
+  if (!SCOUT_WEBHOOK) return;
+
+  const btn = document.getElementById("scouting-sync-btn");
+  if (btn) { btn.textContent = "Syncing…"; btn.disabled = true; }
+
+  const scouts   = getScoutsCache();
+  const projects = getScoutingProjects();
+  let scoutCount = 0, projectCount = 0;
+
+  // 1. Sync every scout row (update if exists, insert if new)
+  for (const scout of scouts) {
+    try {
+      await fetch(SCOUT_WEBHOOK, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "syncScout",
+          name:          scout.name,
+          country:       scout.country       || "",
+          genre:         scout.genre         || "",
+          communication: scout.communication || "",
+          status:        scout.status        || "Active",
+          notes:         scout.notes         || "",
+        }),
+      });
+      scoutCount++;
+    } catch (err) { console.error("Scout sync error:", scout.name, err); }
+  }
+
+  // 2. Sync only projects that have never been pushed to the sheet
+  const updatedProjects = JSON.parse(JSON.stringify(projects));
+  for (const [scoutName, scoutProjects] of Object.entries(updatedProjects)) {
+    for (const p of scoutProjects) {
+      if (p._synced) continue;
+      try {
+        await fetch(SCOUT_WEBHOOK, {
+          method: "POST",
+          body: JSON.stringify({
+            action:      "addProject",
+            scout:       scoutName,
+            projectName: p.projectName || "",
+            amount:      p.amount,
+            currency:    p.currency || "EUR",
+            date:        p.date,
+            notes:       p.notes || "",
+          }),
+        });
+        p._synced = true;
+        projectCount++;
+      } catch (err) { console.error("Project sync error:", scoutName, err); }
+    }
+  }
+  setScoutingProjects(updatedProjects);
+
+  if (btn) {
+    const label = projectCount > 0
+      ? `✓ ${scoutCount} scouts · ${projectCount} projects`
+      : `✓ ${scoutCount} scouts synced`;
+    btn.textContent = label;
+    btn.disabled = false;
+    setTimeout(() => { if (btn) btn.textContent = "↑ Sync to Sheet"; }, 4000);
+  }
+  console.log(`Sync complete — ${scoutCount} scouts, ${projectCount} projects`);
 }
 
 // Inline cell editing — click a cell to edit it in place
