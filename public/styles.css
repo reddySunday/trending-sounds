@@ -115,9 +115,9 @@ body {
 #app {
   position: relative;
   z-index: 2;
-  max-width: 900px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 72px 20px 40px;
+  padding: 72px 32px 40px;
 }
 
 /* ============ HEADER ============ */
