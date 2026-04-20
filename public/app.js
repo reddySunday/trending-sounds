@@ -9,12 +9,13 @@ const RESEARCH_PLATFORMS = [
 ];
 
 const PIPELINE_STAGES = [
-  { key: 'new',       label: 'New',       color: '#94a3b8' },
-  { key: 'contacted', label: 'Contacted', color: '#0ea5e9' },
-  { key: 'replied',   label: 'Replied',   color: '#8b5cf6' },
-  { key: 'meeting',   label: 'Meeting',   color: '#f59e0b' },
-  { key: 'signed',    label: 'Signed',    color: '#10b981' },
-  { key: 'passed',    label: 'Passed',    color: '#ef4444' },
+  { key: 'new',       label: 'New',        color: '#94a3b8' },
+  { key: 'contacted', label: 'Contacted',  color: '#0ea5e9' },
+  { key: 'replied',   label: 'Replied',    color: '#8b5cf6' },
+  { key: 'meeting',   label: 'Meeting',    color: '#f59e0b' },
+  { key: 'offer',     label: 'Offer Sent', color: '#6366f1' },
+  { key: 'signed',    label: 'Signed',     color: '#10b981' },
+  { key: 'passed',    label: 'Passed',     color: '#ef4444' },
 ];
 
 // ============ STATE ============
@@ -346,25 +347,38 @@ function submitQuickAdd(sendOutreach) {
     const message = document.getElementById("qaf-message").value;
     const contact = document.getElementById("qaf-contact").value.trim();
 
+    const outreachPlatform = currentQAFTab === "email" ? "Email" : "IG";
+    const outreachKey = `${finalArtist}|||${finalSong}`;
+
     if (currentQAFTab === "email") {
       const subject = encodeURIComponent(document.getElementById("qaf-subject").value);
       const body = encodeURIComponent(message);
       const to = encodeURIComponent(contact);
       window.open(`https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${subject}&body=${body}`, "_blank");
-      // Mark as contacted
-      const all = getAllPipelineStatuses();
-      const key = `${finalArtist}|||${finalSong}`;
-      if (all[key]) { all[key].status = "contacted"; all[key].updatedAt = new Date().toISOString(); }
-      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
     } else if (currentQAFTab === "instagram") {
       navigator.clipboard.writeText(message).then(() => {
         if (contact) window.open(`https://www.instagram.com/${contact.replace(/^@/, "")}/`, "_blank");
       });
-      // Mark as contacted
-      const all = getAllPipelineStatuses();
-      const key = `${finalArtist}|||${finalSong}`;
-      if (all[key]) { all[key].status = "contacted"; all[key].updatedAt = new Date().toISOString(); }
-      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    }
+
+    // Mark as contacted + save platform
+    const allAfter = getAllPipelineStatuses();
+    if (allAfter[outreachKey]) {
+      allAfter[outreachKey].status = "contacted";
+      allAfter[outreachKey].platform = outreachPlatform;
+      allAfter[outreachKey].updatedAt = new Date().toISOString();
+      localStorage.setItem("pipeline_statuses", JSON.stringify(allAfter));
+      // Sync to sheet
+      fetch(SHEET_WEBHOOK, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "statusUpdate",
+          soundName: finalSong,
+          artist: finalArtist,
+          status: "contacted",
+          platform: outreachPlatform,
+        }),
+      }).catch(() => {});
     }
 
     setQuickAddStatus(`✓ Added${currentQAFTab === "email" ? " — email client opened" : " — DM copied to clipboard"}`, "success");
@@ -390,6 +404,7 @@ function addToPipeline(artist, songName, tiktokLink, spotifyLink) {
     spotifyLink: spotifyLink || existing.spotifyLink || null,
     platform: existing.platform || null,
     followUpDate: existing.followUpDate || null,
+    notes: existing.notes || null,
   };
   localStorage.setItem("pipeline_statuses", JSON.stringify(all));
 
@@ -496,6 +511,10 @@ function renderCRMTable() {
           onchange="setFollowUpDate('${encodedKey}', this.value)"
           onfocus="this.showPicker && this.showPicker()">
       </td>
+      <td class="crm-notes-cell">
+        <textarea class="crm-note" rows="2" placeholder="Add note…"
+          onblur="setCRMNote('${encodedKey}', this.value)">${escHtml(entry.notes || "")}</textarea>
+      </td>
       <td>
         <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove">&#128465;</button>
       </td>
@@ -535,7 +554,11 @@ function crmStatusChange(key, newStatus) {
   const soundName = all[key].songName || keySong;
   fetch(SHEET_WEBHOOK, {
     method: "POST",
-    body: JSON.stringify({ action: "statusUpdate", soundName, artist, status: newStatus }),
+    body: JSON.stringify({
+      action: "statusUpdate", soundName, artist, status: newStatus,
+      platform: all[key].platform || "",
+      notes: all[key].notes || "",
+    }),
   }).catch(() => {});
   // Update status badge color
   const stage = PIPELINE_STAGES.find(s => s.key === newStatus);
@@ -565,6 +588,22 @@ function setFollowUpDate(key, date) {
   fetch(SHEET_WEBHOOK, {
     method: "POST",
     body: JSON.stringify({ action: "setFollowUpDate", soundName, artist, followUpDate: date || "" }),
+  }).catch(() => {});
+}
+
+function setCRMNote(key, note) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  const trimmed = note.trim();
+  if (trimmed === (all[key].notes || "").trim()) return; // no change
+  all[key] = { ...all[key], notes: trimmed || null, updatedAt: new Date().toISOString() };
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  const [keyArtist, keySong] = key.split("|||");
+  const artist = all[key].artist || keyArtist;
+  const soundName = all[key].songName || keySong;
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({ action: "setNote", soundName, artist, notes: trimmed }),
   }).catch(() => {});
 }
 

@@ -611,6 +611,41 @@ header h1 {
   background: var(--blue-pale);
 }
 
+.crm-notes-cell {
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.crm-note {
+  width: 100%;
+  min-width: 140px;
+  padding: 5px 8px;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.crm-note:hover {
+  border-color: var(--border);
+}
+
+.crm-note:focus {
+  border-color: var(--border-focus);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.crm-note::placeholder {
+  color: var(--text-muted);
+}
+
 .crm-empty {
   text-align: center;
   color: var(--text-muted);
