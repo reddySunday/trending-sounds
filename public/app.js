@@ -2,7 +2,61 @@
 const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzPil5g2VOQnK0DBLmWLfdkOzPVprtFk1D7a0z06_Oew3uYW6Qtrz0H3aUYjMmFD5p60A/exec";
 
 // Scouting Network — Google Sheet CSV + webhook
-// SETUP: Deploy the Apps Script from the plan onto the Scouting sheet, then paste the URL below.
+// SETUP: In the Google Sheet go to Extensions → Apps Script, paste the script below, deploy as Web App.
+/*
+  ---- APPS SCRIPT (paste into Extensions > Apps Script on the Scouting sheet) ----
+
+  function doPost(e) {
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const scoutTab = ss.getSheets()[0];
+    const values = scoutTab.getDataRange().getValues();
+    const headers = values[0];
+    const nameIdx = headers.indexOf("Name");
+    const colIdx  = f => headers.indexOf(f);
+
+    if (data.action === "updateScout") {
+      for (let i = 1; i < values.length; i++) {
+        if (values[i][nameIdx] === data.scout) {
+          const fi = colIdx(data.field);
+          if (fi >= 0) scoutTab.getRange(i+1, fi+1).setValue(data.value);
+          if (data.allFields) {
+            Object.entries(data.allFields).forEach(([field, val]) => {
+              const ci = colIdx(field);
+              if (ci >= 0 && !values[i][ci]) scoutTab.getRange(i+1, ci+1).setValue(val);
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    if (data.action === "addScout") {
+      scoutTab.appendRow([
+        data.name, data.country||"", data.genre||"",
+        data.communication||"", data.status||"Active", data.notes||""
+      ]);
+    }
+
+    if (data.action === "deleteScout") {
+      for (let i = 1; i < values.length; i++) {
+        if (values[i][nameIdx] === data.scout) { scoutTab.deleteRow(i+1); break; }
+      }
+    }
+
+    if (data.action === "addProject") {
+      let tab = ss.getSheetByName("Projects");
+      if (!tab) {
+        tab = ss.insertSheet("Projects");
+        tab.appendRow(["Scout","Project","Amount","Currency","Date","Notes"]);
+      }
+      tab.appendRow([data.scout, data.projectName, data.amount, data.currency||"EUR", data.date, data.notes||""]);
+    }
+
+    return ContentService.createTextOutput("ok");
+  }
+  ---- END APPS SCRIPT ----
+*/
 const SCOUT_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1Xfkee4wTUvomkKVpdiN3Ly4JdHDzRJ3jfGVDZbmGNXc/export?format=csv";
 const SCOUT_WEBHOOK = ""; // TODO: paste Apps Script web-app URL here after deployment
 
@@ -1601,26 +1655,33 @@ async function loadScouts() {
     const statusIdx = headers.findIndex(h => h.toLowerCase() === "status");
     const notesIdx  = headers.findIndex(h => h.toLowerCase() === "notes");
 
-    // Preserve any locally-edited fields (status, notes, communication)
+    // For all editable fields: local cache wins over sheet value.
+    // This preserves any in-app edits across page reloads.
+    // If the field has never been touched locally (undefined), fall back to sheet.
     const cached = getScoutsCache();
     const cachedMap = {};
     cached.forEach(s => { cachedMap[s.name] = s; });
 
-    // Build the sheet scouts (with local overrides for edited fields)
+    function pick(fromCache, cacheKey, sheetVal) {
+      // Use cache if the key was ever set (even to empty string), else use sheet value
+      return fromCache[cacheKey] !== undefined ? fromCache[cacheKey] : sheetVal;
+    }
+
+    // Build the sheet scouts (with local overrides for all editable fields)
     const sheetNames = new Set();
     const scouts = rows.slice(1)
       .map(row => {
         const name = (row[nameIdx] || "").trim();
         if (!name) return null;
         sheetNames.add(name);
-        const fromCache = cachedMap[name] || {};
+        const fc = cachedMap[name] || {};
         return {
           name,
-          country:       (row[countryIdx] || "").trim(),
-          genre:         (row[genreIdx]   || "").trim(),
-          communication: fromCache.communication || (row[commIdx]   || "").trim(),
-          status:        fromCache.status        || (row[statusIdx] || "").trim(),
-          notes:         fromCache.notes         !== undefined ? fromCache.notes : (row[notesIdx] || "").trim(),
+          country:       pick(fc, "country",       (row[countryIdx] || "").trim()),
+          genre:         pick(fc, "genre",         (row[genreIdx]   || "").trim()),
+          communication: pick(fc, "communication", (row[commIdx]    || "").trim()),
+          status:        pick(fc, "status",        (row[statusIdx]  || "").trim()),
+          notes:         pick(fc, "notes",         (row[notesIdx]   || "").trim()),
           _local:        false,
         };
       })
@@ -1944,11 +2005,24 @@ function updateScoutField(encodedName, field, value) {
 
   setScoutsCache(scouts);
 
-  // Sync to sheet
+  // Sync all fields to sheet so no column is ever left stale
   if (SCOUT_WEBHOOK) {
     fetch(SCOUT_WEBHOOK, {
       method: "POST",
-      body: JSON.stringify({ action: "updateScout", scout: oldName, field, value }),
+      body: JSON.stringify({
+        action: "updateScout",
+        scout: oldName,
+        field,
+        value,
+        // Full row snapshot so the sheet can fill any missing columns
+        allFields: {
+          Country: scout.country || "",
+          Genre: scout.genre || "",
+          Communication: scout.communication || "",
+          Status: scout.status || "Active",
+          Notes: scout.notes || "",
+        },
+      }),
     }).catch(() => {});
   }
 
