@@ -1606,10 +1606,13 @@ async function loadScouts() {
     const cachedMap = {};
     cached.forEach(s => { cachedMap[s.name] = s; });
 
+    // Build the sheet scouts (with local overrides for edited fields)
+    const sheetNames = new Set();
     const scouts = rows.slice(1)
       .map(row => {
         const name = (row[nameIdx] || "").trim();
         if (!name) return null;
+        sheetNames.add(name);
         const fromCache = cachedMap[name] || {};
         return {
           name,
@@ -1618,9 +1621,17 @@ async function loadScouts() {
           communication: fromCache.communication || (row[commIdx]   || "").trim(),
           status:        fromCache.status        || (row[statusIdx] || "").trim(),
           notes:         fromCache.notes         !== undefined ? fromCache.notes : (row[notesIdx] || "").trim(),
+          _local:        false,
         };
       })
       .filter(Boolean);
+
+    // Re-append any locally-added scouts not present in the sheet
+    cached.forEach(s => {
+      if (!sheetNames.has(s.name)) {
+        scouts.push({ ...s, _local: true });
+      }
+    });
 
     setScoutsCache(scouts);
     return scouts;
