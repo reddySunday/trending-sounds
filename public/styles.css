@@ -2023,3 +2023,28 @@ header h1 {
   padding: 14px 20px 18px;
   border-top: 1px solid var(--border);
 }
+
+/* Amount + currency row inside Log Project modal */
+.lp-amount-row {
+  display: flex;
+  gap: 8px;
+}
+.lp-amount-row .qaf-input {
+  flex: 1;
+}
+.lp-currency-select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 90px;
+  flex-shrink: 0;
+}
+.lp-currency-select:focus { border-color: var(--border-focus); }
+.sp-project { font-weight: 600; color: var(--text); min-width: 120px; }

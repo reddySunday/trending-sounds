@@ -1788,14 +1788,21 @@ function renderScoutingTable(scouts) {
 
     // Expanded project list row
     const projectsHtml = scoutProjects.length > 0
-      ? scoutProjects.map((p, i) => `
+      ? scoutProjects.map((p, i) => {
+          const label = p.projectName || p.artist || "—"; // fallback for old data
+          const currencySymbol = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" }[p.currency || "EUR"] || "€";
+          const amountStr = p.currency === "DKK"
+            ? `${Number(p.amount) || 0} kr`
+            : `${currencySymbol}${Number(p.amount) || 0}`;
+          return `
           <div class="scout-project-entry">
-            <span class="sp-artist">${escHtml(p.artist)}</span>
-            <span class="sp-amount">€${Number(p.amount) || 0}</span>
+            <span class="sp-project">${escHtml(label)}</span>
+            <span class="sp-amount">${amountStr}</span>
             <span class="sp-date">${p.date ? new Date(p.date).toLocaleDateString("en-GB", {day:"2-digit",month:"short",year:"numeric"}) : ""}</span>
             ${p.notes ? `<span class="sp-notes">${escHtml(p.notes)}</span>` : ""}
             <button class="sp-delete" onclick="event.stopPropagation(); deleteScoutProject('${encodedName}', ${i})" title="Remove">×</button>
-          </div>`).join("")
+          </div>`;
+        }).join("")
       : `<div class="sp-empty">No projects logged yet.</div>`;
 
     const expandRow = `
@@ -1895,6 +1902,7 @@ function openLogProjectModal(encodedName) {
   // Clear other fields
   document.getElementById("lp-artist").value = "";
   document.getElementById("lp-amount").value = "";
+  document.getElementById("lp-currency").value = "EUR";
   document.getElementById("lp-notes").value = "";
 
   modal.hidden = false;
@@ -1906,20 +1914,21 @@ function closeLogProjectModal() {
 }
 
 function submitLogProject() {
-  const scout   = document.getElementById("lp-scout").value.trim();
-  const artist  = document.getElementById("lp-artist").value.trim();
-  const amount  = parseFloat(document.getElementById("lp-amount").value) || 0;
-  const date    = document.getElementById("lp-date").value;
-  const notes   = document.getElementById("lp-notes").value.trim();
+  const scout       = document.getElementById("lp-scout").value.trim();
+  const projectName = document.getElementById("lp-artist").value.trim();
+  const currency    = document.getElementById("lp-currency").value || "EUR";
+  const amount      = parseFloat(document.getElementById("lp-amount").value) || 0;
+  const date        = document.getElementById("lp-date").value;
+  const notes       = document.getElementById("lp-notes").value.trim();
 
-  if (!scout || !artist) {
-    alert("Please fill in Scout and Artist fields.");
+  if (!scout || !projectName) {
+    alert("Please fill in Scout and Project name fields.");
     return;
   }
 
   const projects = getScoutingProjects();
   if (!projects[scout]) projects[scout] = [];
-  projects[scout].push({ artist, amount, date, notes });
+  projects[scout].push({ projectName, currency, amount, date, notes });
   setScoutingProjects(projects);
 
   // Expand the scout row after logging
@@ -1929,7 +1938,7 @@ function submitLogProject() {
   if (SCOUT_WEBHOOK) {
     fetch(SCOUT_WEBHOOK, {
       method: "POST",
-      body: JSON.stringify({ action: "addProject", scout, artist, amount, date, notes }),
+      body: JSON.stringify({ action: "addProject", scout, projectName, currency, amount, date, notes }),
     }).catch(() => {});
   }
 

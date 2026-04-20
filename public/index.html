@@ -211,12 +211,20 @@
             <select id="lp-scout" class="qaf-input"></select>
           </div>
           <div class="modal-field">
-            <label class="qaf-label">Artist</label>
-            <input type="text" id="lp-artist" class="qaf-input" placeholder="Artist name">
+            <label class="qaf-label">Project name</label>
+            <input type="text" id="lp-artist" class="qaf-input" placeholder="e.g. NX!ZE - SLXUGHTER">
           </div>
           <div class="modal-field">
-            <label class="qaf-label">Amount (€)</label>
-            <input type="number" id="lp-amount" class="qaf-input" placeholder="0" min="0" step="1">
+            <label class="qaf-label">Amount</label>
+            <div class="lp-amount-row">
+              <select id="lp-currency" class="lp-currency-select">
+                <option value="EUR">EUR €</option>
+                <option value="USD">USD $</option>
+                <option value="GBP">GBP £</option>
+                <option value="DKK">DKK kr</option>
+              </select>
+              <input type="number" id="lp-amount" class="qaf-input" placeholder="0" min="0" step="1">
+            </div>
           </div>
           <div class="modal-field">
             <label class="qaf-label">Date</label>
