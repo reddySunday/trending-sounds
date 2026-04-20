@@ -1727,8 +1727,22 @@ function setScoutFilter(btn) {
 
 const SCOUT_STATUS_OPTIONS = [
   { key: "Active",     color: "#10b981" },
-  { key: "Not active", color: "#94a3b8" },
+  { key: "Not active", color: "#f59e0b" },
 ];
+
+// Format earned amount(s) for a scout's project list, grouped by currency
+function formatScoutEarnings(scoutProjects) {
+  if (!scoutProjects || scoutProjects.length === 0) return "—";
+  const byCurrency = {};
+  scoutProjects.forEach(p => {
+    const cur = p.currency || "EUR";
+    byCurrency[cur] = (byCurrency[cur] || 0) + (Number(p.amount) || 0);
+  });
+  const symbols = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" };
+  return Object.entries(byCurrency).map(([cur, amt]) =>
+    cur === "DKK" ? `${amt} kr` : `${symbols[cur] || cur}${amt}`
+  ).join(" + ");
+}
 
 function renderScoutingTable(scouts) {
   const projects = getScoutingProjects();
@@ -1737,6 +1751,13 @@ function renderScoutingTable(scouts) {
   if (_scoutFilter !== "all") {
     filtered = scouts.filter(s => (s.status || "").toLowerCase() === _scoutFilter.toLowerCase());
   }
+
+  // Sort highest earner first (sum all amounts regardless of currency)
+  filtered = [...filtered].sort((a, b) => {
+    const aTotal = (projects[a.name] || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const bTotal = (projects[b.name] || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    return bTotal - aTotal;
+  });
 
   const tbody = document.getElementById("scouting-table-body");
   if (!tbody) return;
@@ -1754,7 +1775,7 @@ function renderScoutingTable(scouts) {
     const name = scout.name;
     const encodedName = encodeURIComponent(name);
     const scoutProjects = projects[name] || [];
-    const totalEarned = scoutProjects.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const earnedDisplay = formatScoutEarnings(scoutProjects);
     const statusColor = SCOUT_STATUS_OPTIONS.find(o => o.key.toLowerCase() === (scout.status || "").toLowerCase())?.color || "#94a3b8";
     const isExpanded = _expandedScouts.has(name);
 
@@ -1764,7 +1785,7 @@ function renderScoutingTable(scouts) {
 
     const mainRow = `
       <tr class="scout-main-row${isExpanded ? " scout-expanded" : ""}" onclick="toggleScoutExpand('${encodedName}')">
-        <td class="scout-name scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Name', this)" title="Click to edit">${escHtml(name)}</td>
+        <td class="scout-name">${escHtml(name)}</td>
         <td class="scout-country scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Country', this)" title="Click to edit">${escHtml(scout.country)}</td>
         <td class="scout-genre scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Genre', this)" title="Click to edit">${escHtml(scout.genre)}</td>
         <td class="scout-platform scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Communication', this)" title="Click to edit">${escHtml(scout.communication)}</td>
@@ -1775,7 +1796,7 @@ function renderScoutingTable(scouts) {
           </select>
         </td>
         <td class="scout-projects-count">${scoutProjects.length}</td>
-        <td class="scout-earned">€${totalEarned}</td>
+        <td class="scout-earned">${earnedDisplay}</td>
         <td class="crm-notes-cell" onclick="event.stopPropagation(); scoutEditNote('${encodedName}')" title="Click to edit note">
           <span class="crm-note-text">${scout.notes ? escHtml(scout.notes) : '<span class="crm-note-empty">+ note</span>'}</span>
         </td>
