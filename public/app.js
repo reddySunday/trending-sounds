@@ -58,7 +58,7 @@ const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzPil5g2VOQnK0DBL
   ---- END APPS SCRIPT ----
 */
 const SCOUT_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1Xfkee4wTUvomkKVpdiN3Ly4JdHDzRJ3jfGVDZbmGNXc/export?format=csv";
-const SCOUT_WEBHOOK = ""; // TODO: paste Apps Script web-app URL here after deployment
+const SCOUT_WEBHOOK = "https://script.google.com/macros/s/AKfycbx0BFVsmpQezqP3TRywQOQyyHB-Fot-mxhJlKr5udFdctL22-ma57E41W5sjTsSc0sG/exec";
 
 // ============ CONSTANTS ============
 
