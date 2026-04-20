@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
 </head>
 <body>
   <!-- Top nav -->
@@ -13,6 +13,7 @@
     <div class="nav-links">
       <button class="nav-btn active" data-page="dashboard" onclick="showDashboard()">Dashboard</button>
       <button class="nav-btn" data-page="crm" onclick="showCRM()">Outreach Log</button>
+      <button class="nav-btn" data-page="scouting" onclick="showScouting()">Scouting Network</button>
       <button class="nav-btn" data-page="discover" onclick="showDiscover()">Discover</button>
     </div>
   </nav>
@@ -144,6 +145,88 @@
           </tbody>
         </table>
         <p id="crm-empty" class="crm-empty" hidden>No entries yet. Add an artist from the Dashboard.</p>
+      </div>
+    </div>
+
+    <!-- ===== SCOUTING NETWORK PAGE ===== -->
+    <div id="page-scouting" hidden>
+      <header class="scouting-header">
+        <div>
+          <h1>Scouting Network</h1>
+          <p class="subtitle" id="scouting-subtitle">Loading scouts…</p>
+        </div>
+        <button class="btn btn-primary" onclick="openLogProjectModal(null)">+ Log Project</button>
+      </header>
+
+      <!-- Stat chips -->
+      <div class="scouting-stats" id="scouting-stats"></div>
+
+      <!-- Filter bar -->
+      <div class="crm-filter-bar">
+        <div class="pipeline-toggles" id="scouting-filter-toggles">
+          <button class="pipeline-filter-btn active" data-filter="all"     onclick="setScoutFilter(this)">All</button>
+          <button class="pipeline-filter-btn"        data-filter="Active"  onclick="setScoutFilter(this)">Active</button>
+          <button class="pipeline-filter-btn"        data-filter="Not active" onclick="setScoutFilter(this)">Not Active</button>
+        </div>
+        <button class="btn btn-ghost scouting-refresh-btn" onclick="refreshScouts()" title="Reload from sheet">↻ Refresh</button>
+      </div>
+
+      <!-- Scout table -->
+      <div class="crm-table-wrap">
+        <table class="crm-table scouting-table" id="scouting-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Country</th>
+              <th>Genre</th>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Projects</th>
+              <th>Earned</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="scouting-table-body">
+            <!-- rendered by JS -->
+          </tbody>
+        </table>
+        <p id="scouting-empty" class="crm-empty" hidden>No scouts found.</p>
+      </div>
+    </div>
+
+    <!-- Log Project Modal -->
+    <div id="log-project-modal" class="modal-overlay" hidden>
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2>Log Project</h2>
+          <button class="modal-close" onclick="closeLogProjectModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-field">
+            <label class="qaf-label">Scout</label>
+            <select id="lp-scout" class="qaf-input"></select>
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Artist</label>
+            <input type="text" id="lp-artist" class="qaf-input" placeholder="Artist name">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Amount (€)</label>
+            <input type="number" id="lp-amount" class="qaf-input" placeholder="0" min="0" step="1">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Date</label>
+            <input type="date" id="lp-date" class="qaf-input">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Notes</label>
+            <input type="text" id="lp-notes" class="qaf-input" placeholder="Optional notes">
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="submitLogProject()">Save</button>
+          <button class="btn btn-ghost" onclick="closeLogProjectModal()">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -444,7 +527,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=3"></script>
+  <script src="/app.js?v=4"></script>
 
   <!-- Particle network background -->
   <script>

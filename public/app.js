@@ -1,6 +1,11 @@
 // Google Sheets logging
 const SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzPil5g2VOQnK0DBLmWLfdkOzPVprtFk1D7a0z06_Oew3uYW6Qtrz0H3aUYjMmFD5p60A/exec";
 
+// Scouting Network — Google Sheet CSV + webhook
+// SETUP: Deploy the Apps Script from the plan onto the Scouting sheet, then paste the URL below.
+const SCOUT_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1Xfkee4wTUvomkKVpdiN3Ly4JdHDzRJ3jfGVDZbmGNXc/export?format=csv";
+const SCOUT_WEBHOOK = ""; // TODO: paste Apps Script web-app URL here after deployment
+
 // ============ CONSTANTS ============
 
 const RESEARCH_PLATFORMS = [
@@ -35,6 +40,10 @@ let batchIgIndex = 0;
 let activeCRMFilter = "all";
 let quickAddPendingData = null; // { artist, songName, tiktokLink, spotifyLink }
 let currentQAFTab = "email"; // "email" | "instagram" | "none"
+
+// Scouting state
+let _scoutFilter = "all"; // "all" | "Active" | "Not active"
+let _expandedScouts = new Set(); // scout names currently expanded
 
 // ============ DOM REFS ============
 const pageList = document.getElementById("page-list");
@@ -85,7 +94,7 @@ gdEmail.addEventListener("click", () => {
 
 // ============ NAVIGATION ============
 
-const ALL_PAGES = ["page-dashboard", "page-crm", "page-list", "page-outreach", "page-digest"];
+const ALL_PAGES = ["page-dashboard", "page-crm", "page-scouting", "page-list", "page-outreach", "page-digest"];
 
 function showPage(pageId) {
   ALL_PAGES.forEach(id => {
@@ -1561,6 +1570,364 @@ function formatNum(n) {
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
   if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
   return num.toString();
+}
+
+// ============ SCOUTING NETWORK ============
+
+function showScouting() {
+  showPage("page-scouting");
+  updateNav("scouting");
+  loadScouts().then(scouts => {
+    renderScoutingTable(scouts);
+    renderScoutingStats(scouts);
+    updateScoutingSubtitle(scouts);
+  });
+}
+
+// Fetch CSV from Google Sheet, parse, merge with localStorage cache
+async function loadScouts() {
+  // Try to fetch fresh data from the sheet
+  try {
+    const resp = await fetch(SCOUT_SHEET_CSV);
+    if (!resp.ok) throw new Error("fetch failed");
+    const csv = await resp.text();
+    const rows = parseCSV(csv);
+    if (rows.length < 2) throw new Error("empty");
+    const headers = rows[0].map(h => h.trim());
+    const nameIdx   = headers.findIndex(h => h.toLowerCase() === "name");
+    const countryIdx= headers.findIndex(h => h.toLowerCase() === "country");
+    const genreIdx  = headers.findIndex(h => h.toLowerCase() === "genre");
+    const commIdx   = headers.findIndex(h => h.toLowerCase() === "communication");
+    const statusIdx = headers.findIndex(h => h.toLowerCase() === "status");
+    const notesIdx  = headers.findIndex(h => h.toLowerCase() === "notes");
+
+    // Preserve any locally-edited fields (status, notes, communication)
+    const cached = getScoutsCache();
+    const cachedMap = {};
+    cached.forEach(s => { cachedMap[s.name] = s; });
+
+    const scouts = rows.slice(1)
+      .map(row => {
+        const name = (row[nameIdx] || "").trim();
+        if (!name) return null;
+        const fromCache = cachedMap[name] || {};
+        return {
+          name,
+          country:       (row[countryIdx] || "").trim(),
+          genre:         (row[genreIdx]   || "").trim(),
+          communication: fromCache.communication || (row[commIdx]   || "").trim(),
+          status:        fromCache.status        || (row[statusIdx] || "").trim(),
+          notes:         fromCache.notes         !== undefined ? fromCache.notes : (row[notesIdx] || "").trim(),
+        };
+      })
+      .filter(Boolean);
+
+    setScoutsCache(scouts);
+    return scouts;
+  } catch (e) {
+    // Fall back to localStorage cache
+    const cached = getScoutsCache();
+    if (cached.length) return cached;
+    return [];
+  }
+}
+
+// Simple CSV parser (handles quoted fields)
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cols = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur); cur = ""; }
+      else { cur += ch; }
+    }
+    cols.push(cur);
+    rows.push(cols);
+  }
+  return rows;
+}
+
+function getScoutsCache() {
+  try { return JSON.parse(localStorage.getItem("scouting_scouts") || "[]"); } catch { return []; }
+}
+function setScoutsCache(scouts) {
+  localStorage.setItem("scouting_scouts", JSON.stringify(scouts));
+}
+
+function getScoutingProjects() {
+  try { return JSON.parse(localStorage.getItem("scouting_projects") || "{}"); } catch { return {}; }
+}
+function setScoutingProjects(projects) {
+  localStorage.setItem("scouting_projects", JSON.stringify(projects));
+}
+
+function refreshScouts() {
+  // Clear cache and reload
+  localStorage.removeItem("scouting_scouts");
+  const subtitle = document.getElementById("scouting-subtitle");
+  if (subtitle) subtitle.textContent = "Refreshing…";
+  loadScouts().then(scouts => {
+    renderScoutingTable(scouts);
+    renderScoutingStats(scouts);
+    updateScoutingSubtitle(scouts);
+  });
+}
+
+function updateScoutingSubtitle(scouts) {
+  const active = scouts.filter(s => (s.status || "").toLowerCase() === "active").length;
+  const el = document.getElementById("scouting-subtitle");
+  if (el) el.textContent = `${scouts.length} scouts · ${active} active`;
+}
+
+function renderScoutingStats(scouts) {
+  const projects = getScoutingProjects();
+  const active = scouts.filter(s => (s.status || "").toLowerCase() === "active").length;
+  let totalEarned = 0;
+  let dealCount = 0;
+  Object.values(projects).forEach(arr => {
+    arr.forEach(p => { totalEarned += Number(p.amount) || 0; dealCount++; });
+  });
+  const avg = dealCount > 0 ? Math.round(totalEarned / dealCount) : 0;
+
+  const container = document.getElementById("scouting-stats");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="stat-chip" style="--chip-color:#10b981">
+      <span class="stat-chip-count">${active}</span>
+      <span class="stat-chip-label">Active</span>
+    </div>
+    <div class="stat-chip" style="--chip-color:#2563eb">
+      <span class="stat-chip-count">€${totalEarned}</span>
+      <span class="stat-chip-label">Total Earned</span>
+    </div>
+    <div class="stat-chip" style="--chip-color:#8b5cf6">
+      <span class="stat-chip-count">€${avg}</span>
+      <span class="stat-chip-label">Avg per Deal</span>
+    </div>
+    <div class="stat-chip" style="--chip-color:#f59e0b">
+      <span class="stat-chip-count">${dealCount}</span>
+      <span class="stat-chip-label">Deals Logged</span>
+    </div>
+  `;
+}
+
+function setScoutFilter(btn) {
+  document.querySelectorAll("#scouting-filter-toggles .pipeline-filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _scoutFilter = btn.dataset.filter;
+  const scouts = getScoutsCache();
+  renderScoutingTable(scouts);
+}
+
+const SCOUT_STATUS_OPTIONS = [
+  { key: "Active",     color: "#10b981" },
+  { key: "Not active", color: "#94a3b8" },
+];
+
+function renderScoutingTable(scouts) {
+  const projects = getScoutingProjects();
+
+  let filtered = scouts;
+  if (_scoutFilter !== "all") {
+    filtered = scouts.filter(s => (s.status || "").toLowerCase() === _scoutFilter.toLowerCase());
+  }
+
+  const tbody = document.getElementById("scouting-table-body");
+  if (!tbody) return;
+
+  const emptyEl = document.getElementById("scouting-empty");
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+
+  tbody.innerHTML = filtered.map(scout => {
+    const name = scout.name;
+    const encodedName = encodeURIComponent(name);
+    const scoutProjects = projects[name] || [];
+    const totalEarned = scoutProjects.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const statusColor = SCOUT_STATUS_OPTIONS.find(o => o.key.toLowerCase() === (scout.status || "").toLowerCase())?.color || "#94a3b8";
+    const isExpanded = _expandedScouts.has(name);
+
+    const statusOptions = SCOUT_STATUS_OPTIONS.map(o =>
+      `<option value="${o.key}"${o.key.toLowerCase() === (scout.status || "").toLowerCase() ? " selected" : ""}>${o.key}</option>`
+    ).join("");
+
+    const mainRow = `
+      <tr class="scout-main-row${isExpanded ? " scout-expanded" : ""}" onclick="toggleScoutExpand('${encodedName}')">
+        <td class="scout-name">${escHtml(name)}</td>
+        <td class="scout-country">${escHtml(scout.country)}</td>
+        <td class="scout-genre">${escHtml(scout.genre)}</td>
+        <td class="scout-platform">${escHtml(scout.communication)}</td>
+        <td onclick="event.stopPropagation()">
+          <select class="pipeline-select" style="--badge-color:${statusColor}"
+            onchange="updateScoutField('${encodedName}', 'Status', this.value)">
+            ${statusOptions}
+          </select>
+        </td>
+        <td class="scout-projects-count">${scoutProjects.length}</td>
+        <td class="scout-earned">€${totalEarned}</td>
+        <td class="crm-notes-cell" onclick="event.stopPropagation(); scoutEditNote('${encodedName}')" title="Click to edit note">
+          <span class="crm-note-text">${scout.notes ? escHtml(scout.notes) : '<span class="crm-note-empty">+ note</span>'}</span>
+        </td>
+      </tr>`;
+
+    if (!isExpanded) return mainRow;
+
+    // Expanded project list row
+    const projectsHtml = scoutProjects.length > 0
+      ? scoutProjects.map((p, i) => `
+          <div class="scout-project-entry">
+            <span class="sp-artist">${escHtml(p.artist)}</span>
+            <span class="sp-amount">€${Number(p.amount) || 0}</span>
+            <span class="sp-date">${p.date ? new Date(p.date).toLocaleDateString("en-GB", {day:"2-digit",month:"short",year:"numeric"}) : ""}</span>
+            ${p.notes ? `<span class="sp-notes">${escHtml(p.notes)}</span>` : ""}
+            <button class="sp-delete" onclick="event.stopPropagation(); deleteScoutProject('${encodedName}', ${i})" title="Remove">×</button>
+          </div>`).join("")
+      : `<div class="sp-empty">No projects logged yet.</div>`;
+
+    const expandRow = `
+      <tr class="scout-expand-row">
+        <td colspan="8">
+          <div class="scout-projects-wrap">
+            <div class="scout-projects-list">${projectsHtml}</div>
+            <button class="btn btn-sm btn-primary scout-log-btn" onclick="event.stopPropagation(); openLogProjectModal('${encodedName}')">+ Log Project</button>
+          </div>
+        </td>
+      </tr>`;
+
+    return mainRow + expandRow;
+  }).join("");
+}
+
+function toggleScoutExpand(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  if (_expandedScouts.has(name)) {
+    _expandedScouts.delete(name);
+  } else {
+    _expandedScouts.add(name);
+  }
+  const scouts = getScoutsCache();
+  renderScoutingTable(scouts);
+}
+
+function scoutEditNote(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  const scouts = getScoutsCache();
+  const scout = scouts.find(s => s.name === name);
+  const current = scout ? (scout.notes || "") : "";
+  const next = prompt("Note for " + name + ":", current);
+  if (next === null) return;
+  updateScoutField(encodedName, "Notes", next);
+}
+
+function updateScoutField(encodedName, field, value) {
+  const name = decodeURIComponent(encodedName);
+  const scouts = getScoutsCache();
+  const scout = scouts.find(s => s.name === name);
+  if (!scout) return;
+
+  // Map field name to local property
+  const fieldMap = { "Status": "status", "Notes": "notes", "Communication": "communication" };
+  const localField = fieldMap[field];
+  if (localField) scout[localField] = value;
+  setScoutsCache(scouts);
+
+  // Sync to sheet
+  if (SCOUT_WEBHOOK) {
+    fetch(SCOUT_WEBHOOK, {
+      method: "POST",
+      body: JSON.stringify({ action: "updateScout", scout: name, field, value }),
+    }).catch(() => {});
+  }
+
+  // Re-render
+  renderScoutingTable(scouts);
+  renderScoutingStats(scouts);
+}
+
+function openLogProjectModal(encodedName) {
+  const modal = document.getElementById("log-project-modal");
+  if (!modal) return;
+
+  // Populate scout dropdown
+  const scouts = getScoutsCache();
+  const select = document.getElementById("lp-scout");
+  select.innerHTML = scouts.map(s =>
+    `<option value="${escHtml(s.name)}"${encodedName && decodeURIComponent(encodedName) === s.name ? " selected" : ""}>${escHtml(s.name)}</option>`
+  ).join("");
+
+  // Default date to today
+  const dateInput = document.getElementById("lp-date");
+  if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+
+  // Clear other fields
+  document.getElementById("lp-artist").value = "";
+  document.getElementById("lp-amount").value = "";
+  document.getElementById("lp-notes").value = "";
+
+  modal.hidden = false;
+}
+
+function closeLogProjectModal() {
+  const modal = document.getElementById("log-project-modal");
+  if (modal) modal.hidden = true;
+}
+
+function submitLogProject() {
+  const scout   = document.getElementById("lp-scout").value.trim();
+  const artist  = document.getElementById("lp-artist").value.trim();
+  const amount  = parseFloat(document.getElementById("lp-amount").value) || 0;
+  const date    = document.getElementById("lp-date").value;
+  const notes   = document.getElementById("lp-notes").value.trim();
+
+  if (!scout || !artist) {
+    alert("Please fill in Scout and Artist fields.");
+    return;
+  }
+
+  const projects = getScoutingProjects();
+  if (!projects[scout]) projects[scout] = [];
+  projects[scout].push({ artist, amount, date, notes });
+  setScoutingProjects(projects);
+
+  // Expand the scout row after logging
+  _expandedScouts.add(scout);
+
+  // Sync to sheet
+  if (SCOUT_WEBHOOK) {
+    fetch(SCOUT_WEBHOOK, {
+      method: "POST",
+      body: JSON.stringify({ action: "addProject", scout, artist, amount, date, notes }),
+    }).catch(() => {});
+  }
+
+  closeLogProjectModal();
+  const scouts = getScoutsCache();
+  renderScoutingTable(scouts);
+  renderScoutingStats(scouts);
+}
+
+function deleteScoutProject(encodedName, index) {
+  const name = decodeURIComponent(encodedName);
+  if (!confirm(`Remove this project entry for ${name}?`)) return;
+  const projects = getScoutingProjects();
+  if (projects[name]) {
+    projects[name].splice(index, 1);
+    setScoutingProjects(projects);
+  }
+  const scouts = getScoutsCache();
+  renderScoutingTable(scouts);
+  renderScoutingStats(scouts);
 }
 
 // ============ INIT ============
