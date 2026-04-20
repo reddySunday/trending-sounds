@@ -1776,11 +1776,13 @@ function renderScoutingTable(scouts) {
     const encodedName = encodeURIComponent(name);
     const scoutProjects = projects[name] || [];
     const earnedDisplay = formatScoutEarnings(scoutProjects);
-    const statusColor = SCOUT_STATUS_OPTIONS.find(o => o.key.toLowerCase() === (scout.status || "").toLowerCase())?.color || "#94a3b8";
+    // Default empty status to "Active" so colour always resolves
+    const effectiveStatus = (scout.status || "Active").trim() || "Active";
+    const statusColor = SCOUT_STATUS_OPTIONS.find(o => o.key.toLowerCase() === effectiveStatus.toLowerCase())?.color || "#10b981";
     const isExpanded = _expandedScouts.has(name);
 
     const statusOptions = SCOUT_STATUS_OPTIONS.map(o =>
-      `<option value="${o.key}"${o.key.toLowerCase() === (scout.status || "").toLowerCase() ? " selected" : ""}>${o.key}</option>`
+      `<option value="${o.key}"${o.key.toLowerCase() === effectiveStatus.toLowerCase() ? " selected" : ""}>${o.key}</option>`
     ).join("");
 
     const mainRow = `
@@ -1807,9 +1809,17 @@ function renderScoutingTable(scouts) {
 
     if (!isExpanded) return mainRow;
 
-    // Expanded project list row
-    const projectsHtml = scoutProjects.length > 0
-      ? scoutProjects.map((p, i) => {
+    // Expanded project list row — sorted newest first, original index preserved for delete
+    const sortedProjects = scoutProjects
+      .map((p, i) => ({ ...p, _idx: i }))
+      .sort((a, b) => {
+        const aT = a.date ? new Date(a.date).getTime() : 0;
+        const bT = b.date ? new Date(b.date).getTime() : 0;
+        return bT - aT;
+      });
+
+    const projectsHtml = sortedProjects.length > 0
+      ? sortedProjects.map(p => {
           const label = p.projectName || p.artist || "—"; // fallback for old data
           const currencySymbol = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" }[p.currency || "EUR"] || "€";
           const amountStr = p.currency === "DKK"
@@ -1821,7 +1831,7 @@ function renderScoutingTable(scouts) {
             <span class="sp-amount">${amountStr}</span>
             <span class="sp-date">${p.date ? new Date(p.date).toLocaleDateString("en-GB", {day:"2-digit",month:"short",year:"numeric"}) : ""}</span>
             ${p.notes ? `<span class="sp-notes">${escHtml(p.notes)}</span>` : ""}
-            <button class="sp-delete" onclick="event.stopPropagation(); deleteScoutProject('${encodedName}', ${i})" title="Remove">×</button>
+            <button class="sp-delete" onclick="event.stopPropagation(); deleteScoutProject('${encodedName}', ${p._idx})" title="Remove">×</button>
           </div>`;
         }).join("")
       : `<div class="sp-empty">No projects logged yet.</div>`;
