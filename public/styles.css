@@ -506,6 +506,7 @@ header h1 {
 .crm-table td {
   padding: 9px 10px;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
   color: var(--text);
   vertical-align: middle;
   background: var(--surface);
@@ -544,6 +545,10 @@ header h1 {
 }
 
 .crm-links {
+  width: 80px;
+}
+
+.crm-links-inner {
   display: flex;
   align-items: center;
   gap: 6px;

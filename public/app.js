@@ -505,7 +505,7 @@ function renderCRMTable() {
           ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
         </select>
       </td>
-      <td class="crm-links">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></td>
+      <td class="crm-links"><div class="crm-links-inner">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></div></td>
       <td>
         <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
           onchange="setFollowUpDate('${encodedKey}', this.value)"
