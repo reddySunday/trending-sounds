@@ -1764,10 +1764,10 @@ function renderScoutingTable(scouts) {
 
     const mainRow = `
       <tr class="scout-main-row${isExpanded ? " scout-expanded" : ""}" onclick="toggleScoutExpand('${encodedName}')">
-        <td class="scout-name">${escHtml(name)}</td>
-        <td class="scout-country">${escHtml(scout.country)}</td>
-        <td class="scout-genre">${escHtml(scout.genre)}</td>
-        <td class="scout-platform">${escHtml(scout.communication)}</td>
+        <td class="scout-name scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Name', this)" title="Click to edit">${escHtml(name)}</td>
+        <td class="scout-country scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Country', this)" title="Click to edit">${escHtml(scout.country)}</td>
+        <td class="scout-genre scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Genre', this)" title="Click to edit">${escHtml(scout.genre)}</td>
+        <td class="scout-platform scout-editable" onclick="event.stopPropagation(); startScoutEdit('${encodedName}', 'Communication', this)" title="Click to edit">${escHtml(scout.communication)}</td>
         <td onclick="event.stopPropagation()">
           <select class="pipeline-select" style="--badge-color:${statusColor}"
             onchange="updateScoutField('${encodedName}', 'Status', this.value)">
@@ -1778,6 +1778,9 @@ function renderScoutingTable(scouts) {
         <td class="scout-earned">€${totalEarned}</td>
         <td class="crm-notes-cell" onclick="event.stopPropagation(); scoutEditNote('${encodedName}')" title="Click to edit note">
           <span class="crm-note-text">${scout.notes ? escHtml(scout.notes) : '<span class="crm-note-empty">+ note</span>'}</span>
+        </td>
+        <td class="scout-delete-cell" onclick="event.stopPropagation()">
+          <button class="crm-delete-btn" onclick="deleteScout('${encodedName}')" title="Remove scout">🗑</button>
         </td>
       </tr>`;
 
@@ -1797,7 +1800,7 @@ function renderScoutingTable(scouts) {
 
     const expandRow = `
       <tr class="scout-expand-row">
-        <td colspan="8">
+        <td colspan="9">
           <div class="scout-projects-wrap">
             <div class="scout-projects-list">${projectsHtml}</div>
             <button class="btn btn-sm btn-primary scout-log-btn" onclick="event.stopPropagation(); openLogProjectModal('${encodedName}')">+ Log Project</button>
@@ -1831,28 +1834,47 @@ function scoutEditNote(encodedName) {
 }
 
 function updateScoutField(encodedName, field, value) {
-  const name = decodeURIComponent(encodedName);
+  const oldName = decodeURIComponent(encodedName);
   const scouts = getScoutsCache();
-  const scout = scouts.find(s => s.name === name);
+  const scout = scouts.find(s => s.name === oldName);
   if (!scout) return;
 
-  // Map field name to local property
-  const fieldMap = { "Status": "status", "Notes": "notes", "Communication": "communication" };
+  // Map sheet field name to local property
+  const fieldMap = {
+    "Name": "name", "Country": "country", "Genre": "genre",
+    "Communication": "communication", "Status": "status", "Notes": "notes",
+  };
   const localField = fieldMap[field];
   if (localField) scout[localField] = value;
+
+  // If name changed, migrate projects key and expanded set
+  if (field === "Name" && value && value !== oldName) {
+    const projects = getScoutingProjects();
+    if (projects[oldName]) {
+      projects[value] = projects[oldName];
+      delete projects[oldName];
+      setScoutingProjects(projects);
+    }
+    if (_expandedScouts.has(oldName)) {
+      _expandedScouts.delete(oldName);
+      _expandedScouts.add(value);
+    }
+  }
+
   setScoutsCache(scouts);
 
   // Sync to sheet
   if (SCOUT_WEBHOOK) {
     fetch(SCOUT_WEBHOOK, {
       method: "POST",
-      body: JSON.stringify({ action: "updateScout", scout: name, field, value }),
+      body: JSON.stringify({ action: "updateScout", scout: oldName, field, value }),
     }).catch(() => {});
   }
 
   // Re-render
   renderScoutingTable(scouts);
   renderScoutingStats(scouts);
+  updateScoutingSubtitle(scouts);
 }
 
 function openLogProjectModal(encodedName) {
@@ -1915,6 +1937,121 @@ function submitLogProject() {
   const scouts = getScoutsCache();
   renderScoutingTable(scouts);
   renderScoutingStats(scouts);
+}
+
+// Inline cell editing — click a cell to edit it in place
+function startScoutEdit(encodedName, field, td) {
+  if (td.querySelector("input")) return; // already editing
+  const currentText = td.textContent.trim();
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentText;
+  input.className = "scout-cell-input";
+  td.textContent = "";
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  let saved = false;
+  function save() {
+    if (saved) return;
+    saved = true;
+    const newVal = input.value.trim();
+    td.textContent = newVal || currentText;
+    if (newVal && newVal !== currentText) {
+      updateScoutField(encodedName, field, newVal);
+    }
+  }
+  input.addEventListener("blur", save);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+    if (e.key === "Escape") {
+      saved = true; // prevent blur from saving
+      td.textContent = currentText;
+    }
+  });
+}
+
+// Delete a scout entirely
+function deleteScout(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  if (!confirm(`Remove "${name}" from the Scouting Network?\n\nThis will also remove their project history.`)) return;
+
+  let scouts = getScoutsCache();
+  scouts = scouts.filter(s => s.name !== name);
+  setScoutsCache(scouts);
+  _expandedScouts.delete(name);
+
+  // Remove projects
+  const projects = getScoutingProjects();
+  delete projects[name];
+  setScoutingProjects(projects);
+
+  // Sync to sheet
+  if (SCOUT_WEBHOOK) {
+    fetch(SCOUT_WEBHOOK, {
+      method: "POST",
+      body: JSON.stringify({ action: "deleteScout", scout: name }),
+    }).catch(() => {});
+  }
+
+  renderScoutingTable(scouts);
+  renderScoutingStats(scouts);
+  updateScoutingSubtitle(scouts);
+}
+
+// Add Scout modal
+function openAddScoutModal() {
+  const modal = document.getElementById("add-scout-modal");
+  if (!modal) return;
+  // Clear fields
+  ["as-name","as-country","as-genre","as-comm","as-notes"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  document.getElementById("as-status").value = "Active";
+  modal.hidden = false;
+  setTimeout(() => document.getElementById("as-name").focus(), 50);
+}
+
+function closeAddScoutModal() {
+  const modal = document.getElementById("add-scout-modal");
+  if (modal) modal.hidden = true;
+}
+
+function submitAddScout() {
+  const name = document.getElementById("as-name").value.trim();
+  if (!name) { alert("Name is required."); return; }
+
+  const scouts = getScoutsCache();
+  if (scouts.find(s => s.name.toLowerCase() === name.toLowerCase())) {
+    alert(`A scout named "${name}" already exists.`);
+    return;
+  }
+
+  const newScout = {
+    name,
+    country:       document.getElementById("as-country").value.trim(),
+    genre:         document.getElementById("as-genre").value.trim(),
+    communication: document.getElementById("as-comm").value.trim(),
+    status:        document.getElementById("as-status").value || "Active",
+    notes:         document.getElementById("as-notes").value.trim(),
+  };
+  scouts.push(newScout);
+  setScoutsCache(scouts);
+
+  // Sync to sheet
+  if (SCOUT_WEBHOOK) {
+    fetch(SCOUT_WEBHOOK, {
+      method: "POST",
+      body: JSON.stringify({ action: "addScout", ...newScout }),
+    }).catch(() => {});
+  }
+
+  closeAddScoutModal();
+  renderScoutingTable(scouts);
+  renderScoutingStats(scouts);
+  updateScoutingSubtitle(scouts);
 }
 
 function deleteScoutProject(encodedName, index) {

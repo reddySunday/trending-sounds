@@ -1868,6 +1868,31 @@ header h1 {
 .scouting-table .scout-platform { width: 90px; font-size: 12px; color: var(--text-dim); }
 .scouting-table .scout-projects-count { width: 70px; text-align: center; font-size: 13px; }
 .scouting-table .scout-earned   { width: 80px; font-weight: 600; color: var(--green); font-size: 13px; }
+.scouting-table .scout-delete-cell { width: 36px; text-align: center; }
+
+/* Inline-editable cells */
+.scout-editable {
+  cursor: text;
+  position: relative;
+}
+.scout-editable:hover {
+  background: var(--blue-pale) !important;
+  outline: 1px dashed #93c5fd;
+  outline-offset: -2px;
+}
+.scout-cell-input {
+  width: 100%;
+  min-width: 60px;
+  border: 1px solid var(--border-focus);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--text);
+  background: white;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
 
 /* Clickable scout rows */
 .scout-main-row {

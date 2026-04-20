@@ -155,7 +155,10 @@
           <h1>Scouting Network</h1>
           <p class="subtitle" id="scouting-subtitle">Loading scouts…</p>
         </div>
-        <button class="btn btn-primary" onclick="openLogProjectModal(null)">+ Log Project</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="openAddScoutModal()">+ Add Scout</button>
+          <button class="btn btn-primary" onclick="openLogProjectModal(null)">+ Log Project</button>
+        </div>
       </header>
 
       <!-- Stat chips -->
@@ -184,6 +187,7 @@
               <th>Projects</th>
               <th>Earned</th>
               <th>Notes</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="scouting-table-body">
@@ -226,6 +230,49 @@
         <div class="modal-actions">
           <button class="btn btn-primary" onclick="submitLogProject()">Save</button>
           <button class="btn btn-ghost" onclick="closeLogProjectModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Scout Modal -->
+    <div id="add-scout-modal" class="modal-overlay" hidden>
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2>Add Scout</h2>
+          <button class="modal-close" onclick="closeAddScoutModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-field">
+            <label class="qaf-label">Name <span style="color:#ef4444">*</span></label>
+            <input type="text" id="as-name" class="qaf-input" placeholder="Scout name">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Country</label>
+            <input type="text" id="as-country" class="qaf-input" placeholder="e.g. UA, BR, DE">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Genre</label>
+            <input type="text" id="as-genre" class="qaf-input" placeholder="e.g. Hardtekk, Rap">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Communication Platform</label>
+            <input type="text" id="as-comm" class="qaf-input" placeholder="e.g. WhatsApp, Telegram, Email">
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Status</label>
+            <select id="as-status" class="qaf-input">
+              <option value="Active">Active</option>
+              <option value="Not active">Not active</option>
+            </select>
+          </div>
+          <div class="modal-field">
+            <label class="qaf-label">Notes</label>
+            <input type="text" id="as-notes" class="qaf-input" placeholder="Optional notes">
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="submitAddScout()">Add Scout</button>
+          <button class="btn btn-ghost" onclick="closeAddScoutModal()">Cancel</button>
         </div>
       </div>
     </div>
