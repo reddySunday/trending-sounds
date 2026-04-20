@@ -511,9 +511,8 @@ function renderCRMTable() {
           onchange="setFollowUpDate('${encodedKey}', this.value)"
           onfocus="this.showPicker && this.showPicker()">
       </td>
-      <td class="crm-notes-cell">
-        <textarea class="crm-note" rows="2" placeholder="Add note…"
-          onblur="setCRMNote('${encodedKey}', this.value)">${escHtml(entry.notes || "")}</textarea>
+      <td class="crm-notes-cell" onclick="crmEditNote('${encodedKey}')" title="Click to edit note">
+        <span class="crm-note-text">${entry.notes ? escHtml(entry.notes) : '<span class="crm-note-empty">+ note</span>'}</span>
       </td>
       <td>
         <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove">&#128465;</button>
@@ -605,6 +604,16 @@ function setCRMNote(key, note) {
     method: "POST",
     body: JSON.stringify({ action: "setNote", soundName, artist, notes: trimmed }),
   }).catch(() => {});
+}
+
+function crmEditNote(key) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  const current = all[key].notes || "";
+  const next = prompt("Note:", current);
+  if (next === null) return; // cancelled
+  setCRMNote(key, next);
+  renderCRMTable();
 }
 
 async function crmDeleteEntry(key) {
