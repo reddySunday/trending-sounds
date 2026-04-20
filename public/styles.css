@@ -612,23 +612,24 @@ header h1 {
 }
 
 .crm-notes-cell {
-  max-width: 180px;
+  width: 280px;
+  min-width: 200px;
   cursor: pointer;
 }
 
 .crm-note-text {
-  display: block;
+  display: -webkit-box;
   font-size: 12px;
   color: var(--text-dim);
   white-space: pre-wrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-  line-height: 1.4;
-  padding: 3px 6px;
+  line-height: 1.5;
+  padding: 4px 8px;
   border-radius: 4px;
   transition: background 0.15s;
+  min-height: 28px;
 }
 
 .crm-notes-cell:hover .crm-note-text {
