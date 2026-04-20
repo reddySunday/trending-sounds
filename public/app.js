@@ -1685,15 +1685,49 @@ function updateScoutingSubtitle(scouts) {
   if (el) el.textContent = `${scouts.length} scouts · ${active} active`;
 }
 
+// Approximate exchange rates relative to EUR
+const TO_EUR   = { EUR: 1, USD: 0.92, GBP: 1.17, DKK: 0.134 };
+const FROM_EUR = { EUR: 1, USD: 1.09, GBP: 0.855, DKK: 7.46 };
+const CUR_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" };
+
+// Format a number with dot as thousands separator (e.g. 1.200)
+function fmtNum(n) {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+// Format a currency amount: €1.200 / $450 / 7.460 kr
+function fmtCurrency(amount, currency) {
+  const sym = CUR_SYMBOLS[currency] || currency;
+  const str = fmtNum(amount);
+  return currency === "DKK" ? `${str} kr` : `${sym}${str}`;
+}
+
 function renderScoutingStats(scouts) {
   const projects = getScoutingProjects();
-  const active = scouts.filter(s => (s.status || "").toLowerCase() === "active").length;
-  let totalEarned = 0;
-  let dealCount = 0;
-  Object.values(projects).forEach(arr => {
-    arr.forEach(p => { totalEarned += Number(p.amount) || 0; dealCount++; });
+  const active = scouts.filter(s => (s.status || "Active").toLowerCase() === "active").length;
+
+  // Flatten all projects
+  const allProjects = [];
+  Object.values(projects).forEach(arr => arr.forEach(p => allProjects.push(p)));
+  const dealCount = allProjects.length;
+
+  // Find most-used currency
+  const currencyCount = {};
+  allProjects.forEach(p => {
+    const cur = p.currency || "EUR";
+    currencyCount[cur] = (currencyCount[cur] || 0) + 1;
   });
-  const avg = dealCount > 0 ? Math.round(totalEarned / dealCount) : 0;
+  const mainCurrency = dealCount > 0
+    ? Object.entries(currencyCount).sort((a, b) => b[1] - a[1])[0][0]
+    : "EUR";
+
+  // Convert all amounts to mainCurrency
+  const totalConverted = allProjects.reduce((sum, p) => {
+    const cur = p.currency || "EUR";
+    const inEUR = (Number(p.amount) || 0) * (TO_EUR[cur] || 1);
+    return sum + inEUR * (FROM_EUR[mainCurrency] || 1);
+  }, 0);
+  const avg = dealCount > 0 ? totalConverted / dealCount : 0;
 
   const container = document.getElementById("scouting-stats");
   if (!container) return;
@@ -1703,11 +1737,11 @@ function renderScoutingStats(scouts) {
       <span class="stat-chip-label">Active</span>
     </div>
     <div class="stat-chip" style="--chip-color:#2563eb">
-      <span class="stat-chip-count">€${totalEarned}</span>
+      <span class="stat-chip-count">${fmtCurrency(totalConverted, mainCurrency)}</span>
       <span class="stat-chip-label">Total Earned</span>
     </div>
     <div class="stat-chip" style="--chip-color:#8b5cf6">
-      <span class="stat-chip-count">€${avg}</span>
+      <span class="stat-chip-count">${fmtCurrency(avg, mainCurrency)}</span>
       <span class="stat-chip-label">Avg per Deal</span>
     </div>
     <div class="stat-chip" style="--chip-color:#f59e0b">
@@ -1738,10 +1772,7 @@ function formatScoutEarnings(scoutProjects) {
     const cur = p.currency || "EUR";
     byCurrency[cur] = (byCurrency[cur] || 0) + (Number(p.amount) || 0);
   });
-  const symbols = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" };
-  return Object.entries(byCurrency).map(([cur, amt]) =>
-    cur === "DKK" ? `${amt} kr` : `${symbols[cur] || cur}${amt}`
-  ).join(" + ");
+  return Object.entries(byCurrency).map(([cur, amt]) => fmtCurrency(amt, cur)).join(" + ");
 }
 
 function renderScoutingTable(scouts) {
@@ -1752,11 +1783,14 @@ function renderScoutingTable(scouts) {
     filtered = scouts.filter(s => (s.status || "").toLowerCase() === _scoutFilter.toLowerCase());
   }
 
-  // Sort highest earner first (sum all amounts regardless of currency)
+  // Sort: highest earner first, then Active before Not Active as tiebreaker
   filtered = [...filtered].sort((a, b) => {
     const aTotal = (projects[a.name] || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const bTotal = (projects[b.name] || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    return bTotal - aTotal;
+    if (bTotal !== aTotal) return bTotal - aTotal;
+    const aActive = (a.status || "Active").toLowerCase() === "active" ? 0 : 1;
+    const bActive = (b.status || "Active").toLowerCase() === "active" ? 0 : 1;
+    return aActive - bActive;
   });
 
   const tbody = document.getElementById("scouting-table-body");
@@ -1821,10 +1855,7 @@ function renderScoutingTable(scouts) {
     const projectsHtml = sortedProjects.length > 0
       ? sortedProjects.map(p => {
           const label = p.projectName || p.artist || "—"; // fallback for old data
-          const currencySymbol = { EUR: "€", USD: "$", GBP: "£", DKK: "kr" }[p.currency || "EUR"] || "€";
-          const amountStr = p.currency === "DKK"
-            ? `${Number(p.amount) || 0} kr`
-            : `${currencySymbol}${Number(p.amount) || 0}`;
+          const amountStr = fmtCurrency(Number(p.amount) || 0, p.currency || "EUR");
           return `
           <div class="scout-project-entry">
             <span class="sp-project">${escHtml(label)}</span>
