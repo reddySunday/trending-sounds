@@ -417,7 +417,7 @@ function submitQuickAdd(sendOutreach) {
 
     if (currentQAFTab === "email") {
       const subject = encodeURIComponent(document.getElementById("qaf-subject").value);
-      const body = encodeURIComponent(message);
+      const body = encodeURIComponent(markdownToHtml(message));
       const to = encodeURIComponent(contact);
       window.open(`https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${subject}&body=${body}`, "_blank");
     } else if (currentQAFTab === "instagram") {
@@ -884,7 +884,7 @@ function openBatchOutreach(type) {
       const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
       const tpl = getTemplates();
       const subject = encodeURIComponent(tpl.emailSubject.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name));
-      const body = encodeURIComponent(tpl.emailBody.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name));
+      const body = encodeURIComponent(markdownToHtml(tpl.emailBody.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name)));
       setTimeout(() => {
         window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`, "_blank");
       }, idx * 500);
@@ -1424,6 +1424,24 @@ const DEFAULT_TEMPLATES = {
   emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
 };
 
+// Convert plain text (with optional [text](url) markdown links) to HTML for
+// Outlook's compose deeplink so hyperlinks render as real clickable links.
+function markdownToHtml(text) {
+  // Escape HTML entities first so we don't accidentally create tags
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  // Convert [link text](https://...) → <a href="url">link text</a>
+  const withLinks = escaped.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+    '<a href="$2">$1</a>'
+  );
+  // Convert newlines → <br> so paragraph spacing is preserved
+  const withBreaks = withLinks.replace(/\n/g, "<br>\n");
+  return `<html><body>${withBreaks}</body></html>`;
+}
+
 function getTemplates() {
   try {
     const saved = localStorage.getItem("outreach_templates");
@@ -1562,7 +1580,7 @@ function sendMessage() {
   if (currentType === "email") {
     logOutreach();
     const subject = encodeURIComponent(emailSubject.value);
-    const body = encodeURIComponent(messageBody.value);
+    const body = encodeURIComponent(markdownToHtml(messageBody.value));
     window.open(
       `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`,
       "_blank"
