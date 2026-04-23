@@ -1455,34 +1455,51 @@ function showEmailToast(msg) {
   t._tm = setTimeout(() => { t.style.display = "none"; }, 6000);
 }
 
-// Open Outlook compose. When the body has [text](url) links, the HTML version
-// is written to the clipboard and Outlook opens without a pre-filled body so
-// the user can Ctrl+V to get the formatted email with real hyperlinks.
-// Falls back to plain-text body URL when no links are present.
-async function openOutlookCompose(subject, body, to) {
+// Copy rendered HTML to clipboard using DOM selection (works in all browsers).
+// Returns true on success.
+function copyHtmlToClipboard(htmlBody) {
+  // Strip outer <html><body> wrapper — can't nest those inside a div
+  const inner = htmlBody
+    .replace(/^<html><body[^>]*>/i, "")
+    .replace(/<\/body><\/html>$/i, "");
+  const div = document.createElement("div");
+  div.innerHTML = inner;
+  // Position off-screen but still in the rendered page so it can be selected
+  div.style.cssText = "position:fixed;left:-9999px;top:0;white-space:pre-wrap;";
+  document.body.appendChild(div);
+  try {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(div);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const ok = document.execCommand("copy");
+    sel.removeAllRanges();
+    return ok;
+  } catch (e) {
+    return false;
+  } finally {
+    document.body.removeChild(div);
+  }
+}
+
+// Open Outlook compose. When the body has [text](url) links:
+//   1. Copies the formatted HTML (with real <a> links) to clipboard
+//   2. Opens Outlook with subject only (empty body)
+//   3. Shows a toast: "Ctrl+V to paste"
+// Without links: passes plain text via URL as before.
+function openOutlookCompose(subject, body, to) {
   const htmlBody = markdownToHtml(body);
   const subj = encodeURIComponent(subject);
   const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
 
-  if (htmlBody) {
-    // Strip [text](url) → plain text fallback for the clipboard text/plain flavour
-    const plainBody = body.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1");
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html":  new Blob([htmlBody],  { type: "text/html"  }),
-          "text/plain": new Blob([plainBody], { type: "text/plain" }),
-        })
-      ]);
-      window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}`, "_blank");
-      showEmailToast("📋 Email body copied — click in Outlook and press Ctrl+V to paste");
-      return;
-    } catch (err) {
-      console.warn("Clipboard write failed, falling back to plain text:", err);
-    }
+  if (htmlBody && copyHtmlToClipboard(htmlBody)) {
+    window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}`, "_blank");
+    showEmailToast("📋 Email body copied — click in the Outlook body and press Ctrl+V to paste");
+    return;
   }
 
-  // Plain text path (no links, or clipboard unavailable)
+  // Plain text path (no links, or copy failed)
   const b = encodeURIComponent(body);
   window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`, "_blank");
 }
