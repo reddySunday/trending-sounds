@@ -1416,91 +1416,14 @@ function switchTab(type) {
 const DEFAULT_TEMPLATES = {
   ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
   emailSubject: `{artist} x SUNDAY`,
-  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on [Kat Slater (Native Remedies Remix)](https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA?si=d89e0b602b044370) alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
+  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater (Native Remedies Remix) https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
 };
 
-// Convert [text](url) markdown links → HTML <a> tags.
-// Returns null when no links are present (caller sends plain text instead).
-function markdownToHtml(text) {
-  if (!/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/.test(text)) return null;
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const withLinks = escaped.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-    '<a href="$2">$1</a>'
-  );
-  const withBreaks = withLinks.replace(/\n/g, "<br>\n");
-  return `<html><body style="font-family:Calibri,Arial,sans-serif;font-size:14px">${withBreaks}</body></html>`;
-}
-
-// Show a floating toast banner (used when clipboard paste is needed)
-function showEmailToast(msg) {
-  let t = document.getElementById("_email-toast");
-  if (!t) {
-    t = document.createElement("div");
-    t.id = "_email-toast";
-    Object.assign(t.style, {
-      position: "fixed", top: "72px", left: "50%", transform: "translateX(-50%)",
-      background: "#1e293b", color: "#fff", padding: "12px 22px", borderRadius: "10px",
-      fontSize: "14px", fontWeight: "500", zIndex: "99999",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.35)", pointerEvents: "none",
-    });
-    document.body.appendChild(t);
-  }
-  t.textContent = msg;
-  t.style.display = "block";
-  clearTimeout(t._tm);
-  t._tm = setTimeout(() => { t.style.display = "none"; }, 6000);
-}
-
-// Copy rendered HTML to clipboard using DOM selection (works in all browsers).
-// Returns true on success.
-function copyHtmlToClipboard(htmlBody) {
-  // Strip outer <html><body> wrapper — can't nest those inside a div
-  const inner = htmlBody
-    .replace(/^<html><body[^>]*>/i, "")
-    .replace(/<\/body><\/html>$/i, "");
-  const div = document.createElement("div");
-  div.innerHTML = inner;
-  // Position off-screen but still in the rendered page so it can be selected
-  div.style.cssText = "position:fixed;left:-9999px;top:0;white-space:pre-wrap;";
-  document.body.appendChild(div);
-  try {
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(div);
-    sel.removeAllRanges();
-    sel.addRange(range);
-    const ok = document.execCommand("copy");
-    sel.removeAllRanges();
-    return ok;
-  } catch (e) {
-    return false;
-  } finally {
-    document.body.removeChild(div);
-  }
-}
-
-// Open Outlook compose. When the body has [text](url) links:
-//   1. Copies the formatted HTML (with real <a> links) to clipboard
-//   2. Opens Outlook with subject only (empty body)
-//   3. Shows a toast: "Ctrl+V to paste"
-// Without links: passes plain text via URL as before.
+// Open Outlook Web compose with subject + plain-text body.
 function openOutlookCompose(subject, body, to) {
-  const htmlBody = markdownToHtml(body);
   const subj = encodeURIComponent(subject);
+  const b    = encodeURIComponent(body);
   const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-
-  if (htmlBody && copyHtmlToClipboard(htmlBody)) {
-    window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}`, "_blank");
-    showEmailToast("📋 Email body copied — click in the Outlook body and press Ctrl+V to paste");
-    return;
-  }
-
-  // Plain text path (no links, or copy failed)
-  const b = encodeURIComponent(body);
   window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`, "_blank");
 }
 
