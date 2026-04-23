@@ -416,10 +416,7 @@ function submitQuickAdd(sendOutreach) {
     const outreachKey = `${finalArtist}|||${finalSong}`;
 
     if (currentQAFTab === "email") {
-      const subject = encodeURIComponent(document.getElementById("qaf-subject").value);
-      const body = encodeURIComponent(markdownToHtml(message));
-      const to = encodeURIComponent(contact);
-      window.open(`https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${subject}&body=${body}`, "_blank");
+      openOutlookCompose(document.getElementById("qaf-subject").value, message, contact);
     } else if (currentQAFTab === "instagram") {
       navigator.clipboard.writeText(message).then(() => {
         if (contact) window.open(`https://www.instagram.com/${contact.replace(/^@/, "")}/`, "_blank");
@@ -883,11 +880,9 @@ function openBatchOutreach(type) {
       const name = s.tiktok_name_of_sound || s.song_name || "Unknown Sound";
       const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
       const tpl = getTemplates();
-      const subject = encodeURIComponent(tpl.emailSubject.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name));
-      const body = encodeURIComponent(markdownToHtml(tpl.emailBody.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name)));
-      setTimeout(() => {
-        window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`, "_blank");
-      }, idx * 500);
+      const subject = tpl.emailSubject.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name);
+      const body    = tpl.emailBody.replace(/\{artist\}/g, artist).replace(/\{song\}/g, name);
+      setTimeout(() => openOutlookCompose(subject, body), idx * 500);
       logBatchOutreach(s, "Email");
     });
   } else {
@@ -1424,26 +1419,72 @@ const DEFAULT_TEMPLATES = {
   emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on [Kat Slater (Native Remedies Remix)](https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA?si=d89e0b602b044370) alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
 };
 
-// Convert plain text (with optional [text](url) markdown links) to HTML for
-// Outlook's compose deeplink so hyperlinks render as real clickable links.
-// Returns plain text unchanged when no [text](url) links are present,
-// avoiding <br> tags showing literally in emails that have no links.
+// Convert [text](url) markdown links → HTML <a> tags.
+// Returns null when no links are present (caller sends plain text instead).
 function markdownToHtml(text) {
-  const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
-  if (!LINK_RE.test(text)) return text; // no links → send as plain text
-  // Escape HTML entities first so we don't accidentally create spurious tags
+  if (!/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/.test(text)) return null;
   const escaped = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  // Convert [link text](https://...) → <a href="url">link text</a>
   const withLinks = escaped.replace(
     /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2">$1</a>'
   );
-  // Convert newlines → <br> so paragraph spacing is preserved in HTML mode
   const withBreaks = withLinks.replace(/\n/g, "<br>\n");
-  return `<html><body>${withBreaks}</body></html>`;
+  return `<html><body style="font-family:Calibri,Arial,sans-serif;font-size:14px">${withBreaks}</body></html>`;
+}
+
+// Show a floating toast banner (used when clipboard paste is needed)
+function showEmailToast(msg) {
+  let t = document.getElementById("_email-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "_email-toast";
+    Object.assign(t.style, {
+      position: "fixed", top: "72px", left: "50%", transform: "translateX(-50%)",
+      background: "#1e293b", color: "#fff", padding: "12px 22px", borderRadius: "10px",
+      fontSize: "14px", fontWeight: "500", zIndex: "99999",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.35)", pointerEvents: "none",
+    });
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => { t.style.display = "none"; }, 6000);
+}
+
+// Open Outlook compose. When the body has [text](url) links, the HTML version
+// is written to the clipboard and Outlook opens without a pre-filled body so
+// the user can Ctrl+V to get the formatted email with real hyperlinks.
+// Falls back to plain-text body URL when no links are present.
+async function openOutlookCompose(subject, body, to) {
+  const htmlBody = markdownToHtml(body);
+  const subj = encodeURIComponent(subject);
+  const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
+
+  if (htmlBody) {
+    // Strip [text](url) → plain text fallback for the clipboard text/plain flavour
+    const plainBody = body.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1");
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html":  new Blob([htmlBody],  { type: "text/html"  }),
+          "text/plain": new Blob([plainBody], { type: "text/plain" }),
+        })
+      ]);
+      window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}`, "_blank");
+      showEmailToast("📋 Email body copied — click in Outlook and press Ctrl+V to paste");
+      return;
+    } catch (err) {
+      console.warn("Clipboard write failed, falling back to plain text:", err);
+    }
+  }
+
+  // Plain text path (no links, or clipboard unavailable)
+  const b = encodeURIComponent(body);
+  window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`, "_blank");
 }
 
 function getTemplates() {
@@ -1583,12 +1624,7 @@ async function copyMessage() {
 function sendMessage() {
   if (currentType === "email") {
     logOutreach();
-    const subject = encodeURIComponent(emailSubject.value);
-    const body = encodeURIComponent(markdownToHtml(messageBody.value));
-    window.open(
-      `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`,
-      "_blank"
-    );
+    openOutlookCompose(emailSubject.value, messageBody.value);
   } else {
     copyMessage().then(() => {
       const artist = currentSound.tiktok_sound_creator_name || currentSound.artists || "";
