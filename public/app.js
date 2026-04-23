@@ -1421,13 +1421,17 @@ function switchTab(type) {
 const DEFAULT_TEMPLATES = {
   ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
   emailSubject: `{artist} x SUNDAY`,
-  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater Native Remedies Remix alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
+  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on [Kat Slater (Native Remedies Remix)](https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA?si=d89e0b602b044370) alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
 };
 
 // Convert plain text (with optional [text](url) markdown links) to HTML for
 // Outlook's compose deeplink so hyperlinks render as real clickable links.
+// Returns plain text unchanged when no [text](url) links are present,
+// avoiding <br> tags showing literally in emails that have no links.
 function markdownToHtml(text) {
-  // Escape HTML entities first so we don't accidentally create tags
+  const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  if (!LINK_RE.test(text)) return text; // no links → send as plain text
+  // Escape HTML entities first so we don't accidentally create spurious tags
   const escaped = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -1437,7 +1441,7 @@ function markdownToHtml(text) {
     /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2">$1</a>'
   );
-  // Convert newlines → <br> so paragraph spacing is preserved
+  // Convert newlines → <br> so paragraph spacing is preserved in HTML mode
   const withBreaks = withLinks.replace(/\n/g, "<br>\n");
   return `<html><body>${withBreaks}</body></html>`;
 }
