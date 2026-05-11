@@ -544,6 +544,18 @@ header h1 {
   width: 70px;
 }
 
+.crm-platform-link {
+  font-size: 11px;
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.crm-platform-link:hover {
+  text-decoration: underline;
+  color: var(--blue-light);
+}
+
 .crm-links {
   width: 80px;
 }

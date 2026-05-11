@@ -423,11 +423,12 @@ function submitQuickAdd(sendOutreach) {
       });
     }
 
-    // Mark as contacted + save platform
+    // Mark as contacted + save platform + contact info
     const allAfter = getAllPipelineStatuses();
     if (allAfter[outreachKey]) {
       allAfter[outreachKey].status = "contacted";
       allAfter[outreachKey].platform = outreachPlatform;
+      allAfter[outreachKey].contactInfo = contact;
       allAfter[outreachKey].updatedAt = new Date().toISOString();
       localStorage.setItem("pipeline_statuses", JSON.stringify(allAfter));
       // Sync to sheet
@@ -541,6 +542,7 @@ function renderCRMTable() {
     const artist = entry.artist || keyArtist || "Unknown";
     const song = entry.songName || keySong || "Unknown";
     const platform = entry.platform || "";
+    const contactInfo = entry.contactInfo || "";
     const status = entry.status || "new";
     const stage = PIPELINE_STAGES.find(s => s.key === status) || PIPELINE_STAGES[0];
     const dateStr = entry.dateAdded
@@ -561,7 +563,13 @@ function renderCRMTable() {
       <td class="crm-date">${escHtml(dateStr)}</td>
       <td class="crm-artist">${escHtml(artist)}</td>
       <td class="crm-song">${escHtml(song)}</td>
-      <td class="crm-platform">${escHtml(platform)}</td>
+      <td class="crm-platform">${
+        platform === "IG" && contactInfo
+          ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-platform-link">IG</a>`
+          : platform === "Email" && contactInfo
+            ? `<a href="mailto:${escHtml(contactInfo)}" class="crm-platform-link" title="${escHtml(contactInfo)}">Email</a>`
+            : escHtml(platform)
+      }</td>
       <td>
         <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange('${encodedKey}', this.value)">
           ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
