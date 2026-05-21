@@ -549,11 +549,54 @@ header h1 {
   color: var(--blue);
   text-decoration: none;
   font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .crm-platform-link:hover {
   text-decoration: underline;
   color: var(--blue-light);
+}
+
+/* Email address popup */
+.email-contact-popup {
+  position: absolute;
+  z-index: 999;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.email-contact-addr {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.email-contact-copy {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.email-contact-copy:hover {
+  background: var(--blue-pale);
+  border-color: var(--border-focus);
+  color: var(--blue);
 }
 
 .crm-links {

@@ -567,7 +567,7 @@ function renderCRMTable() {
         platform === "IG" && contactInfo
           ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-platform-link">IG</a>`
           : platform === "Email" && contactInfo
-            ? `<a href="mailto:${escHtml(contactInfo)}" class="crm-platform-link" title="${escHtml(contactInfo)}">Email</a>`
+            ? `<button class="crm-platform-link" onclick="showEmailContact(this, '${escHtml(contactInfo)}')">Email</button>`
             : escHtml(platform)
       }</td>
       <td>
@@ -610,6 +610,45 @@ function crmAddLink(key) {
   all[key].updatedAt = new Date().toISOString();
   localStorage.setItem("pipeline_statuses", JSON.stringify(all));
   renderCRMTable();
+}
+
+function showEmailContact(btn, email) {
+  // Remove any existing popup
+  const existing = document.getElementById("email-contact-popup");
+  if (existing) {
+    existing.remove();
+    // If clicking same button again, just close
+    if (existing.dataset.email === email) return;
+  }
+
+  const popup = document.createElement("div");
+  popup.id = "email-contact-popup";
+  popup.dataset.email = email;
+  popup.className = "email-contact-popup";
+  popup.innerHTML = `
+    <span class="email-contact-addr">${email}</span>
+    <button class="email-contact-copy" onclick="
+      navigator.clipboard.writeText('${email.replace(/'/g, "\\'")}').then(() => {
+        this.textContent = 'Copied!';
+        setTimeout(() => document.getElementById('email-contact-popup')?.remove(), 1200);
+      });
+    ">Copy</button>
+  `;
+
+  const rect = btn.getBoundingClientRect();
+  popup.style.top = (rect.bottom + window.scrollY + 4) + "px";
+  popup.style.left = rect.left + "px";
+  document.body.appendChild(popup);
+
+  // Close when clicking outside
+  setTimeout(() => {
+    document.addEventListener("click", function handler(e) {
+      if (!popup.contains(e.target) && e.target !== btn) {
+        popup.remove();
+        document.removeEventListener("click", handler);
+      }
+    });
+  }, 0);
 }
 
 function crmStatusChange(key, newStatus) {
