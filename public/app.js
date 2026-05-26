@@ -68,15 +68,16 @@ const RESEARCH_PLATFORMS = [
 ];
 
 const PIPELINE_STAGES = [
-  { key: 'new',        label: 'New',        color: '#94a3b8' },
-  { key: 'contacted',  label: 'Contacted',  color: '#0ea5e9' },
-  { key: 'no-reply',   label: 'No Reply',   color: '#64748b' },
-  { key: 'ghosted',    label: 'Ghosted',    color: '#475569' },
-  { key: 'replied',    label: 'Replied',    color: '#8b5cf6' },
-  { key: 'meeting',    label: 'Meeting',    color: '#f59e0b' },
-  { key: 'offer',      label: 'Offer Sent', color: '#6366f1' },
-  { key: 'signed',     label: 'Signed',     color: '#10b981' },
-  { key: 'passed',     label: 'Passed',     color: '#ef4444' },
+  { key: 'new',            label: 'New',            color: '#94a3b8' },
+  { key: 'contacted',      label: 'Contacted',      color: '#3b82f6' },
+  { key: 'no-reply',       label: 'No Reply',       color: '#f97316' },
+  { key: 'ghosted',        label: 'Ghosted',        color: '#64748b' },
+  { key: 'replied',        label: 'Replied',        color: '#a855f7' },
+  { key: 'meeting',        label: 'Meeting',        color: '#f59e0b' },
+  { key: 'offer',          label: 'Offer Sent',     color: '#6366f1' },
+  { key: 'signed',         label: 'Signed',         color: '#10b981' },
+  { key: 'already-signed', label: 'Already Signed', color: '#eab308' },
+  { key: 'passed',         label: 'Passed',         color: '#ef4444' },
 ];
 
 // ============ STATE ============

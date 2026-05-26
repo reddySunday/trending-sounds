@@ -121,6 +121,7 @@
           <button class="pipeline-filter-btn" data-pipeline="meeting" onclick="setCRMFilter(this)">Meeting</button>
           <button class="pipeline-filter-btn" data-pipeline="offer" onclick="setCRMFilter(this)">Offer Sent</button>
           <button class="pipeline-filter-btn" data-pipeline="signed" onclick="setCRMFilter(this)">Signed</button>
+          <button class="pipeline-filter-btn" data-pipeline="already-signed" onclick="setCRMFilter(this)">Already Signed</button>
           <button class="pipeline-filter-btn" data-pipeline="passed" onclick="setCRMFilter(this)">Passed</button>
         </div>
         <button class="btn btn-primary crm-add-btn" onclick="showDashboard(); setTimeout(()=>document.getElementById('quick-add-input').focus(),200)">+ Add Artist</button>
@@ -338,6 +339,7 @@
               <button class="pipeline-filter-btn" data-pipeline="replied" onclick="togglePipelineFilter(this)">Replied</button>
               <button class="pipeline-filter-btn" data-pipeline="meeting" onclick="togglePipelineFilter(this)">Meeting</button>
               <button class="pipeline-filter-btn" data-pipeline="signed" onclick="togglePipelineFilter(this)">Signed</button>
+              <button class="pipeline-filter-btn" data-pipeline="already-signed" onclick="togglePipelineFilter(this)">Already Signed</button>
               <button class="pipeline-filter-btn" data-pipeline="passed" onclick="togglePipelineFilter(this)">Passed</button>
             </div>
           </div>
@@ -587,7 +589,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=8"></script>
+  <script src="/app.js?v=9"></script>
 
   <!-- Particle network background -->
   <script>
