@@ -1124,21 +1124,15 @@ function resetFilters() {
 
 // ============ FETCH & RENDER ============
 
-function buildApiParams(filters) {
+function buildApiParams(filters, page = 1) {
   const params = {};
   params.sort_by = filters.sortBy;
   if (filters.labels.length > 0) params.label_categories = filters.labels.join(",");
   if (filters.country) params.country_codes = filters.country;
-  if (filters.min24h) params.min_count = filters.min24h;
-  if (filters.max24h) params.max_count = filters.max24h;
-  if (filters.minTotal) params.min_total_count = filters.minTotal;
-  if (filters.maxTotal) params.max_total_count = filters.maxTotal;
-  if (filters.min7d) params.min_7day_count = filters.min7d;
-  if (filters.max7d) params.max_7day_count = filters.max7d;
-  if (filters.minGrowth) params.min_growth = filters.minGrowth;
-  if (filters.maxGrowth) params.max_growth = filters.maxGrowth;
-  params.limit = "50";
-  params.page = "1";
+  // Note: the Chartex API ignores max_count/min_count in practice —
+  // all min/max filtering is done client-side after fetching enough pages.
+  params.limit = "100";  // API max per page
+  params.page = String(page);
   return params;
 }
 
@@ -1183,15 +1177,36 @@ async function fetchSounds(filters) {
   soundsList.hidden = true;
   resultsCount.hidden = true;
   try {
-    const params = new URLSearchParams(buildApiParams(filters));
-    const resp = await fetch(`/api/external/v1/tiktok-sounds/?${params}`);
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      const msg = err.error?.message || err.error || err.detail || `API returned ${resp.status}`;
-      throw new Error(typeof msg === "object" ? JSON.stringify(msg) : msg);
+    // The Chartex API returns results sorted descending by the chosen metric.
+    // Max-type filters require going deeper into the result set (e.g. max24h=15000
+    // means sounds with <15000 creates, which only appear from ~page 3 onward).
+    // Fetch multiple pages in parallel so client-side filtering has enough data.
+    const hasMaxFilter = filters.max24h || filters.max7d || filters.maxTotal || filters.maxGrowth;
+    const pageCount = hasMaxFilter ? 5 : 1;  // 5×100 = 500 items covers most ranges
+
+    const fetches = [];
+    for (let p = 1; p <= pageCount; p++) {
+      const params = new URLSearchParams(buildApiParams(filters, p));
+      fetches.push(
+        fetch(`/api/external/v1/tiktok-sounds/?${params}`).then(r => {
+          if (!r.ok) throw new Error(`API returned ${r.status}`);
+          return r.json();
+        })
+      );
     }
-    const data = await resp.json();
-    allSounds = data?.data?.items || data?.data || data?.results || (Array.isArray(data) ? data : []);
+    const pages = await Promise.all(fetches);
+
+    // Pool all items and deduplicate by sound ID
+    const seen = new Set();
+    allSounds = [];
+    for (const data of pages) {
+      const items = data?.data?.items || data?.data || data?.results || (Array.isArray(data) ? data : []);
+      for (const item of items) {
+        const id = item.tiktok_sound_id;
+        if (!seen.has(id)) { seen.add(id); allSounds.push(item); }
+      }
+    }
+
     filteredSounds = clientSideFilter(allSounds, filters);
     filteredSounds = clientSideSearch(filteredSounds, filters.search);
     renderSounds();
