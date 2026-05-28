@@ -76,7 +76,7 @@ const PIPELINE_STAGES = [
   { key: 'meeting',        label: 'Meeting',        color: '#f59e0b' },
   { key: 'offer',          label: 'Offer Sent',     color: '#6366f1' },
   { key: 'signed',         label: 'Signed',         color: '#10b981' },
-  { key: 'already-signed', label: 'Already Signed', color: '#eab308' },
+  { key: 'already-signed', label: 'Already Signed', color: '#334155' },
   { key: 'passed',         label: 'Passed',         color: '#ef4444' },
 ];
 
