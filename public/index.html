@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=8">
+  <link rel="stylesheet" href="/styles.css?v=9">
 </head>
 <body>
   <!-- Top nav -->
@@ -111,19 +111,19 @@
 
       <!-- CRM filter bar -->
       <div class="crm-filter-bar">
-        <div class="pipeline-toggles" id="crm-pipeline-toggles">
-          <button class="pipeline-filter-btn active" data-pipeline="all" onclick="setCRMFilter(this)">All</button>
-          <button class="pipeline-filter-btn" data-pipeline="new" onclick="setCRMFilter(this)">New</button>
-          <button class="pipeline-filter-btn" data-pipeline="contacted" onclick="setCRMFilter(this)">Contacted</button>
-          <button class="pipeline-filter-btn" data-pipeline="no-reply" onclick="setCRMFilter(this)">No Reply</button>
-          <button class="pipeline-filter-btn" data-pipeline="ghosted" onclick="setCRMFilter(this)">Ghosted</button>
-          <button class="pipeline-filter-btn" data-pipeline="replied" onclick="setCRMFilter(this)">Replied</button>
-          <button class="pipeline-filter-btn" data-pipeline="meeting" onclick="setCRMFilter(this)">Meeting</button>
-          <button class="pipeline-filter-btn" data-pipeline="offer" onclick="setCRMFilter(this)">Offer Sent</button>
-          <button class="pipeline-filter-btn" data-pipeline="signed" onclick="setCRMFilter(this)">Signed</button>
-          <button class="pipeline-filter-btn" data-pipeline="already-signed" onclick="setCRMFilter(this)">Already Signed</button>
-          <button class="pipeline-filter-btn" data-pipeline="passed" onclick="setCRMFilter(this)">Passed</button>
-        </div>
+        <select id="crm-status-filter" class="crm-status-select" onchange="setCRMFilter(this.value)">
+          <option value="all">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="no-reply">No Reply</option>
+          <option value="ghosted">Ghosted</option>
+          <option value="replied">Replied</option>
+          <option value="meeting">Meeting</option>
+          <option value="offer">Offer Sent</option>
+          <option value="signed">Signed</option>
+          <option value="already-signed">Already Signed</option>
+          <option value="passed">Passed</option>
+        </select>
         <button class="btn btn-primary crm-add-btn" onclick="showDashboard(); setTimeout(()=>document.getElementById('quick-add-input').focus(),200)">+ Add Artist</button>
       </div>
 
@@ -592,7 +592,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=12"></script>
+  <script src="/app.js?v=13"></script>
 
   <!-- Particle network background -->
   <script>

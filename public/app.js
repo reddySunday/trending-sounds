@@ -500,16 +500,15 @@ function setQuickAddStatus(msg, type) {
 
 let _crmFilter = "all";
 
-function setCRMFilter(btn) {
-  document.querySelectorAll("#crm-pipeline-toggles .pipeline-filter-btn").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  _crmFilter = btn.dataset.pipeline;
+function setCRMFilter(value) {
+  _crmFilter = value;
+  const sel = document.getElementById("crm-status-filter");
+  if (sel) sel.value = value;
   renderCRMTable();
 }
 
 function setCRMFilterByKey(key) {
-  const btn = document.querySelector(`#crm-pipeline-toggles [data-pipeline="${key}"]`);
-  if (btn) setCRMFilter(btn);
+  setCRMFilter(key);
 }
 
 function updateCRMSubtitle() {
