@@ -115,7 +115,7 @@ body {
 #app {
   position: relative;
   z-index: 2;
-  max-width: 1400px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 72px 32px 40px;
 }
