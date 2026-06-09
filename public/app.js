@@ -467,6 +467,9 @@ function addToPipeline(artist, songName, tiktokLink, spotifyLink) {
     tiktokLink: tiktokLink || existing.tiktokLink || null,
     spotifyLink: spotifyLink || existing.spotifyLink || null,
     platform: existing.platform || null,
+    contactInfo: existing.contactInfo || null,
+    igArtist: existing.igArtist || null,
+    igManager: existing.igManager || null,
     followUpDate: existing.followUpDate || null,
     notes: existing.notes || null,
   };
@@ -544,6 +547,8 @@ function renderCRMTable() {
     const song = entry.songName || keySong || "Unknown";
     const platform = entry.platform || "";
     const contactInfo = entry.contactInfo || "";
+    const igArtist = entry.igArtist || "";
+    const igManager = entry.igManager || "";
     const status = entry.status || "new";
     const stage = PIPELINE_STAGES.find(s => s.key === status) || PIPELINE_STAGES[0];
     const dateStr = entry.dateAdded
@@ -559,39 +564,107 @@ function renderCRMTable() {
     const followUpClass = followUpVal ? "crm-followup has-date" : "crm-followup";
 
     const encodedKey = escHtml(entry.key);
+    const expandId = `crm-expand-${CSS.escape(entry.key)}`;
+    const chevId = `crm-chev-${CSS.escape(entry.key)}`;
 
-    return `<tr>
+    // Outreach contact display
+    const contactHtml = platform === "IG" && contactInfo
+      ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link">@${escHtml(contactInfo.replace(/^@/, ""))}</a>`
+      : platform === "Email" && contactInfo
+        ? `<button class="crm-platform-link" onclick="showEmailContact(this,'${escHtml(contactInfo)}')">Email</button>`
+        : platform ? escHtml(platform) : '<span class="crm-expand-empty">—</span>';
+
+    // IG field helpers
+    const igArtistHtml = igArtist
+      ? `<a href="https://www.instagram.com/${escHtml(igArtist.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link" onclick="event.stopPropagation()">@${escHtml(igArtist.replace(/^@/, ""))}</a>
+         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igArtist')" title="Edit">✎</button>`
+      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igArtist')">+ add</button>`;
+    const igManagerHtml = igManager
+      ? `<a href="https://www.instagram.com/${escHtml(igManager.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link" onclick="event.stopPropagation()">@${escHtml(igManager.replace(/^@/, ""))}</a>
+         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igManager')" title="Edit">✎</button>`
+      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igManager')">+ add</button>`;
+
+    return `
+    <tr class="crm-main-row" onclick="toggleCRMExpand('${encodedKey}')">
       <td class="crm-date">${escHtml(dateStr)}</td>
       <td class="crm-artist">${escHtml(artist)}</td>
       <td class="crm-song">${escHtml(song)}</td>
-      <td class="crm-platform">${
-        platform === "IG" && contactInfo
-          ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-platform-link">IG</a>`
-          : platform === "Email" && contactInfo
-            ? `<button class="crm-platform-link" onclick="showEmailContact(this, '${escHtml(contactInfo)}')">Email</button>`
-            : escHtml(platform)
-      }</td>
-      <td>
+      <td onclick="event.stopPropagation()">
         <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange('${encodedKey}', this.value)">
           ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
         </select>
       </td>
-      <td class="crm-links"><div class="crm-links-inner">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></div></td>
-      <td>
-        <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
-          onchange="setFollowUpDate('${encodedKey}', this.value)"
-          onfocus="this.showPicker && this.showPicker()">
+      <td class="crm-chevron-cell">
+        <span class="crm-chevron" id="${escHtml(chevId)}">▸</span>
       </td>
-      <td class="crm-notes-cell" onclick="crmEditNote('${encodedKey}')" title="Click to edit note">
-        <span class="crm-note-text">${entry.notes ? escHtml(entry.notes) : '<span class="crm-note-empty">+ note</span>'}</span>
-      </td>
-      <td>
-        <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove">&#128465;</button>
+    </tr>
+    <tr class="crm-expand-row" id="${escHtml(expandId)}" hidden>
+      <td colspan="5">
+        <div class="crm-expand-inner">
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Outreach</span>
+            <span class="crm-expand-value">${contactHtml}</span>
+          </div>
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Artist Instagram</span>
+            <span class="crm-expand-value crm-ig-field">${igArtistHtml}</span>
+          </div>
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Manager Instagram</span>
+            <span class="crm-expand-value crm-ig-field">${igManagerHtml}</span>
+          </div>
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Links</span>
+            <span class="crm-expand-value">
+              <div class="crm-links-inner">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></div>
+            </span>
+          </div>
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Follow-up</span>
+            <span class="crm-expand-value">
+              <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
+                onchange="setFollowUpDate('${encodedKey}', this.value)"
+                onfocus="this.showPicker && this.showPicker()">
+            </span>
+          </div>
+          <div class="crm-expand-field crm-expand-field--notes">
+            <span class="crm-expand-label">Notes</span>
+            <textarea class="crm-expand-notes" placeholder="Add a note…"
+              onblur="setCRMNote('${encodedKey}', this.value)"
+            >${escHtml(entry.notes || "")}</textarea>
+          </div>
+          <div class="crm-expand-actions">
+            <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove entry">🗑 Remove</button>
+          </div>
+        </div>
       </td>
     </tr>`;
   }).join("");
 
   updateCRMSubtitle();
+}
+
+function toggleCRMExpand(key) {
+  const row = document.getElementById(`crm-expand-${CSS.escape(key)}`);
+  const chev = document.getElementById(`crm-chev-${CSS.escape(key)}`);
+  if (!row) return;
+  const opening = row.hidden;
+  row.hidden = !opening;
+  if (chev) chev.classList.toggle("open", opening);
+}
+
+function crmEditIG(key, field) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  const current = all[key][field] || "";
+  const label = field === "igArtist" ? "Artist Instagram handle" : "Manager Instagram handle";
+  const val = prompt(`${label} (without @):`, current.replace(/^@/, ""));
+  if (val === null) return; // cancelled
+  const trimmed = val.trim().replace(/^@/, "");
+  all[key][field] = trimmed || null;
+  all[key].updatedAt = new Date().toISOString();
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  renderCRMTable();
 }
 
 function crmAddLink(key) {
@@ -716,15 +789,6 @@ function setCRMNote(key, note) {
   }).catch(() => {});
 }
 
-function crmEditNote(key) {
-  const all = getAllPipelineStatuses();
-  if (!all[key]) return;
-  const current = all[key].notes || "";
-  const next = prompt("Note:", current);
-  if (next === null) return; // cancelled
-  setCRMNote(key, next);
-  renderCRMTable();
-}
 
 async function crmDeleteEntry(key) {
   const all = getAllPipelineStatuses();
