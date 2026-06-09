@@ -818,6 +818,57 @@ header h1 {
   color: var(--text-muted);
 }
 
+/* Outreach inline editor */
+.crm-outreach-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.crm-outreach-sel {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 4px 22px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E")
+    no-repeat right 6px center;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.crm-outreach-sel:focus { border-color: var(--border-focus); }
+
+.crm-outreach-contact {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  width: 160px;
+  transition: border-color 0.15s;
+}
+
+.crm-outreach-contact:focus { border-color: var(--border-focus); }
+
+.crm-outreach-link {
+  font-size: 13px;
+  color: var(--blue);
+  text-decoration: none;
+  line-height: 1;
+}
+
+.crm-outreach-link:hover { opacity: 0.75; }
+
 .crm-ig-link {
   font-size: 13px;
   color: var(--blue);

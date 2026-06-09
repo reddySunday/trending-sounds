@@ -566,12 +566,25 @@ function renderCRMTable() {
     const expandId = `crm-expand-${CSS.escape(entry.key)}`;
     const chevId = `crm-chev-${CSS.escape(entry.key)}`;
 
-    // Outreach contact display
-    const contactHtml = platform === "IG" && contactInfo
-      ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link">@${escHtml(contactInfo.replace(/^@/, ""))}</a>`
-      : platform === "Email" && contactInfo
-        ? `<button class="crm-platform-link" onclick="showEmailContact(this,'${escHtml(contactInfo)}')">Email</button>`
-        : platform ? escHtml(platform) : '<span class="crm-expand-empty">—</span>';
+    // Outreach contact — inline editable form
+    const contactHtml = `
+      <div class="crm-outreach-inline" onclick="event.stopPropagation()">
+        <select class="crm-outreach-sel"
+          onchange="crmOutreachPlatformChange('${encodedKey}', this.value, this)">
+          <option value=""${!platform ? " selected" : ""}>— not set</option>
+          <option value="Email"${platform === "Email" ? " selected" : ""}>Email</option>
+          <option value="IG"${platform === "IG" ? " selected" : ""}>Instagram</option>
+        </select>
+        <input class="crm-outreach-contact" type="text"
+          placeholder="${platform === "IG" ? "@handle" : "email address"}"
+          value="${escHtml(contactInfo)}"
+          ${!platform ? "hidden" : ""}
+          onblur="crmSetOutreachContact('${encodedKey}', this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()">
+        ${platform === "IG" && contactInfo
+          ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-outreach-link" title="Open profile">↗</a>`
+          : ""}
+      </div>`;
 
     // IG field helpers
     const igArtistHtml = igArtist
@@ -641,6 +654,54 @@ function renderCRMTable() {
   }).join("");
 
   updateCRMSubtitle();
+}
+
+function crmOutreachPlatformChange(key, platform, selectEl) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  all[key].platform = platform || null;
+  if (!platform) all[key].contactInfo = null;
+  all[key].updatedAt = new Date().toISOString();
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  // Show/hide & update the contact input inline (no full re-render)
+  const wrap = selectEl.closest(".crm-outreach-inline");
+  if (!wrap) return;
+  const input = wrap.querySelector(".crm-outreach-contact");
+  if (input) {
+    input.hidden = !platform;
+    input.placeholder = platform === "IG" ? "@handle" : "email address";
+    input.value = all[key].contactInfo || "";
+    if (platform) input.focus();
+  }
+  // Remove stale link icon
+  const oldLink = wrap.querySelector(".crm-outreach-link");
+  if (oldLink) oldLink.remove();
+}
+
+function crmSetOutreachContact(key, value) {
+  const all = getAllPipelineStatuses();
+  if (!all[key]) return;
+  const trimmed = value.trim().replace(/^@/, "");
+  if (trimmed === (all[key].contactInfo || "").replace(/^@/, "")) return;
+  all[key].contactInfo = trimmed || null;
+  all[key].updatedAt = new Date().toISOString();
+  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  // Update IG link icon if platform is IG
+  const input = document.querySelector(`#crm-expand-${CSS.escape(key)} .crm-outreach-contact`);
+  if (!input) return;
+  const wrap = input.closest(".crm-outreach-inline");
+  const oldLink = wrap?.querySelector(".crm-outreach-link");
+  if (oldLink) oldLink.remove();
+  if (all[key].platform === "IG" && trimmed) {
+    const a = document.createElement("a");
+    a.href = `https://www.instagram.com/${trimmed}/`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.className = "crm-outreach-link";
+    a.title = "Open profile";
+    a.textContent = "↗";
+    wrap.appendChild(a);
+  }
 }
 
 function toggleCRMExpand(key) {
