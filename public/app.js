@@ -499,6 +499,7 @@ function setQuickAddStatus(msg, type) {
 // ============ CRM TABLE ============
 
 let _crmFilter = "all";
+let _crmOpenRows = new Set(); // indices of currently expanded rows
 
 function setCRMFilter(value) {
   _crmFilter = value;
@@ -661,6 +662,14 @@ function renderCRMTable() {
   }).join("");
 
   updateCRMSubtitle();
+
+  // Restore previously open rows
+  _crmOpenRows.forEach(idx => {
+    const row = document.getElementById(`crm-expand-${idx}`);
+    const chev = document.getElementById(`crm-chev-${idx}`);
+    if (row) row.hidden = false;
+    if (chev) chev.classList.add("open");
+  });
 }
 
 function crmOutreachPlatformChange(key, platform, selectEl) {
@@ -717,6 +726,7 @@ function toggleCRMExpand(idx) {
   const opening = row.hidden;
   row.hidden = !opening;
   if (chev) chev.classList.toggle("open", opening);
+  if (opening) _crmOpenRows.add(idx); else _crmOpenRows.delete(idx);
 }
 
 function crmEditIG(key, field) {
