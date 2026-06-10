@@ -611,8 +611,7 @@ function renderCRMTable() {
           ? `<input type="date" class="crm-followup has-date" value="${escHtml(followUpVal)}"
               onchange="setFollowUpDate('${encodedKey}', this.value)"
               onfocus="this.showPicker && this.showPicker()">`
-          : `<button class="crm-followup-add" onclick="crmOpenFollowUp(this, '${encodedKey}')" title="Set follow-up">+ set</button>`
-        }
+          : ``}
       </td>
       <td class="crm-chevron-cell">
         <span class="crm-chevron" id="${chevId}">▸</span>
@@ -632,6 +631,14 @@ function renderCRMTable() {
           <div class="crm-expand-field">
             <span class="crm-expand-label">Manager Instagram</span>
             <span class="crm-expand-value crm-ig-field">${igManagerHtml}</span>
+          </div>
+          <div class="crm-expand-field">
+            <span class="crm-expand-label">Follow-up</span>
+            <span class="crm-expand-value">
+              <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
+                onchange="setFollowUpDate('${encodedKey}', this.value)"
+                onfocus="this.showPicker && this.showPicker()">
+            </span>
           </div>
           <div class="crm-expand-field">
             <span class="crm-expand-label">Links</span>
@@ -811,16 +818,6 @@ function crmStatusChange(key, newStatus) {
   }
 }
 
-function crmOpenFollowUp(btn, key) {
-  // Replace the "+ set" button with a date input inline
-  const input = document.createElement("input");
-  input.type = "date";
-  input.className = "crm-followup has-date";
-  input.onchange = () => { setFollowUpDate(key, input.value); };
-  input.onblur = () => { if (!input.value) renderCRMTable(); };
-  btn.replaceWith(input);
-  input.showPicker && input.showPicker();
-}
 
 function setFollowUpDate(key, date) {
   const all = getAllPipelineStatuses();
