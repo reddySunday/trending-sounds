@@ -607,9 +607,12 @@ function renderCRMTable() {
         </select>
       </td>
       <td onclick="event.stopPropagation()">
-        <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
-          onchange="setFollowUpDate('${encodedKey}', this.value)"
-          onfocus="this.showPicker && this.showPicker()">
+        ${followUpVal
+          ? `<input type="date" class="crm-followup has-date" value="${escHtml(followUpVal)}"
+              onchange="setFollowUpDate('${encodedKey}', this.value)"
+              onfocus="this.showPicker && this.showPicker()">`
+          : `<button class="crm-followup-add" onclick="crmOpenFollowUp(this, '${encodedKey}')" title="Set follow-up">+ set</button>`
+        }
       </td>
       <td class="crm-chevron-cell">
         <span class="crm-chevron" id="${chevId}">▸</span>
@@ -808,17 +811,24 @@ function crmStatusChange(key, newStatus) {
   }
 }
 
+function crmOpenFollowUp(btn, key) {
+  // Replace the "+ set" button with a date input inline
+  const input = document.createElement("input");
+  input.type = "date";
+  input.className = "crm-followup has-date";
+  input.onchange = () => { setFollowUpDate(key, input.value); };
+  input.onblur = () => { if (!input.value) renderCRMTable(); };
+  btn.replaceWith(input);
+  input.showPicker && input.showPicker();
+}
+
 function setFollowUpDate(key, date) {
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key] = { ...all[key], followUpDate: date || null, updatedAt: new Date().toISOString() };
   localStorage.setItem("pipeline_statuses", JSON.stringify(all));
-  // Update class on the input
-  const inputs = document.querySelectorAll(".crm-followup");
-  // The value change already happened; just toggle the class via re-check
-  inputs.forEach(inp => {
-    inp.classList.toggle("has-date", !!inp.value);
-  });
+  // Re-render so cleared dates revert to "+ set" button
+  renderCRMTable();
   // Sync to sheet
   const [keyArtist, keySong] = key.split("|||");
   const artist = all[key].artist || keyArtist;
