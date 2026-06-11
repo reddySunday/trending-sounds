@@ -98,6 +98,71 @@ let activeCRMFilter = "all";
 let quickAddPendingData = null; // { artist, songName, tiktokLink, spotifyLink }
 let currentQAFTab = "email"; // "email" | "instagram" | "none"
 
+// Cloud data layer — in-memory caches backed by GitHub via /api/data
+let _pipelineCache  = {};   // pipeline_statuses
+let _scoutsCache    = [];   // scouting_scouts
+let _projectsCache  = {};   // scouting_projects
+let _templatesCache = null; // outreach_templates
+let _syncTimers     = {};   // per-key debounce timers
+
+function _cloudSync(key, data) {
+  clearTimeout(_syncTimers[key]);
+  _syncTimers[key] = setTimeout(() => {
+    fetch("/api/data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, data }),
+    }).catch(() => {});
+  }, 800);
+}
+
+async function initDataLayer() {
+  try {
+    const res = await fetch("/api/data");
+    if (!res.ok) throw new Error(`/api/data returned ${res.status}`);
+    const store = await res.json();
+    if (store.pipeline_statuses  && !_isEmpty(store.pipeline_statuses))  _pipelineCache  = store.pipeline_statuses;
+    if (store.scouting_scouts    && !_isEmpty(store.scouting_scouts))    _scoutsCache    = store.scouting_scouts;
+    if (store.scouting_projects  && !_isEmpty(store.scouting_projects))  _projectsCache  = store.scouting_projects;
+    if (store.outreach_templates)                                         _templatesCache = store.outreach_templates;
+    await _migrateFromLocalStorage(store);
+  } catch (e) {
+    console.warn("Cloud sync unavailable — falling back to localStorage", e);
+    // Populate caches from localStorage as fallback
+    try { _pipelineCache  = JSON.parse(localStorage.getItem("pipeline_statuses")  || "{}"); } catch {}
+    try { _scoutsCache    = JSON.parse(localStorage.getItem("scouting_scouts")    || "[]"); } catch {}
+    try { _projectsCache  = JSON.parse(localStorage.getItem("scouting_projects")  || "{}"); } catch {}
+    try { _templatesCache = JSON.parse(localStorage.getItem("outreach_templates")); }        catch {}
+  }
+}
+
+function _isEmpty(v) {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.keys(v).length === 0;
+  return false;
+}
+
+async function _migrateFromLocalStorage(store) {
+  // Push any localStorage data to GitHub if the cloud store is empty for that key
+  const migrations = [
+    ["pipeline_statuses",  store.pipeline_statuses,  v => { _pipelineCache  = v; }],
+    ["scouting_scouts",    store.scouting_scouts,    v => { _scoutsCache    = v; }],
+    ["scouting_projects",  store.scouting_projects,  v => { _projectsCache  = v; }],
+    ["outreach_templates", store.outreach_templates, v => { _templatesCache = v; }],
+  ];
+  for (const [lsKey, cloudVal, setter] of migrations) {
+    if (!_isEmpty(cloudVal)) continue; // already has data in cloud
+    const raw = localStorage.getItem(lsKey);
+    if (!raw) continue;
+    try {
+      const data = JSON.parse(raw);
+      setter(data);
+      _cloudSync(lsKey, data);
+    } catch {}
+  }
+}
+
 // Scouting state
 let _scoutFilter = "all"; // "all" | "Active" | "Not active"
 let _expandedScouts = new Set(); // scout names currently expanded
@@ -431,7 +496,8 @@ function submitQuickAdd(sendOutreach) {
       allAfter[outreachKey].platform = outreachPlatform;
       allAfter[outreachKey].contactInfo = contact;
       allAfter[outreachKey].updatedAt = new Date().toISOString();
-      localStorage.setItem("pipeline_statuses", JSON.stringify(allAfter));
+      _pipelineCache = allAfter;
+      _cloudSync("pipeline_statuses", allAfter);
       // Sync to sheet
       fetch(SHEET_WEBHOOK, {
         method: "POST",
@@ -473,7 +539,8 @@ function addToPipeline(artist, songName, tiktokLink, spotifyLink) {
     followUpDate: existing.followUpDate || null,
     notes: existing.notes || null,
   };
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
 
   fetch(SHEET_WEBHOOK, {
     method: "POST",
@@ -682,7 +749,8 @@ function crmOutreachPlatformChange(idx, platform, selectEl) {
   all[key].platform = platform || null;
   if (!platform) all[key].contactInfo = null;
   all[key].updatedAt = new Date().toISOString();
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   // Show/hide & update the contact input inline (no full re-render)
   const wrap = selectEl.closest(".crm-outreach-inline");
   if (!wrap) return;
@@ -707,7 +775,8 @@ function crmSetOutreachContact(idx, value, input) {
   if (trimmed === (all[key].contactInfo || "").replace(/^@/, "")) return;
   all[key].contactInfo = trimmed || null;
   all[key].updatedAt = new Date().toISOString();
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   // Update IG link icon if platform is IG
   if (!input) return;
   const wrap = input.closest(".crm-outreach-inline");
@@ -747,7 +816,8 @@ function crmEditIG(idx, field) {
   const trimmed = val.trim().replace(/^@/, "");
   all[key][field] = trimmed || null;
   all[key].updatedAt = new Date().toISOString();
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   renderCRMTable();
 }
 
@@ -768,7 +838,8 @@ function crmAddLink(idx) {
     return;
   }
   all[key].updatedAt = new Date().toISOString();
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   renderCRMTable();
 }
 
@@ -817,7 +888,8 @@ function crmStatusChange(idx, newStatus) {
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key] = { ...all[key], status: newStatus, updatedAt: new Date().toISOString() };
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   // Sync to sheet
   const [keyArtist, keySong] = key.split("|||");
   const artist = all[key].artist || keyArtist;
@@ -847,7 +919,8 @@ function setFollowUpDate(idx, date) {
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key] = { ...all[key], followUpDate: date || null, updatedAt: new Date().toISOString() };
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   // Re-render so cleared dates revert to "+ set" button
   renderCRMTable();
   // Sync to sheet
@@ -868,7 +941,8 @@ function setCRMNote(idx, note) {
   const trimmed = note.trim();
   if (trimmed === (all[key].notes || "").trim()) return; // no change
   all[key] = { ...all[key], notes: trimmed || null, updatedAt: new Date().toISOString() };
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   const [keyArtist, keySong] = key.split("|||");
   const artist = all[key].artist || keyArtist;
   const soundName = all[key].songName || keySong;
@@ -890,7 +964,8 @@ async function crmDeleteEntry(idx) {
   const song = entry.songName || keySong;
   if (!confirm(`Remove "${song}" by ${artist} from your pipeline?`)) return;
   delete all[key];
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   fetch(SHEET_WEBHOOK, {
     method: "POST",
     body: JSON.stringify({ action: "deleteFromLog", soundName: song, artist }),
@@ -919,10 +994,7 @@ function getPipelineKey(sound) {
 }
 
 function getAllPipelineStatuses() {
-  try {
-    const saved = localStorage.getItem("pipeline_statuses");
-    return saved ? JSON.parse(saved) : {};
-  } catch { return {}; }
+  return _pipelineCache;
 }
 
 function getPipelineStatus(sound) {
@@ -947,7 +1019,8 @@ function setPipelineStatus(sound, status, extraData = {}) {
     tiktokLink: sound.tiktok_official_link || existing.tiktokLink || null,
     ...extraData,
   };
-  localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
   syncPipelineToSheet(sound, status);
 }
 
@@ -1011,7 +1084,8 @@ async function deleteFromLog(index) {
     const all = getAllPipelineStatuses();
     const key = getPipelineKey(sound);
     delete all[key];
-    localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+    _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
     renderSounds();
   } catch {}
 }
@@ -1646,11 +1720,7 @@ function openOutlookCompose(subject, body, to) {
 }
 
 function getTemplates() {
-  try {
-    const saved = localStorage.getItem("outreach_templates");
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return { ...DEFAULT_TEMPLATES };
+  return _templatesCache || { ...DEFAULT_TEMPLATES };
 }
 
 function showTemplateEditor() {
@@ -1671,7 +1741,8 @@ function saveTemplates() {
     emailSubject: document.getElementById("tpl-email-subject").value,
     emailBody: document.getElementById("tpl-email-body").value,
   };
-  localStorage.setItem("outreach_templates", JSON.stringify(tpl));
+  _templatesCache = tpl;
+  _cloudSync("outreach_templates", tpl);
   const fb = document.getElementById("tpl-feedback");
   fb.textContent = "Saved!";
   fb.hidden = false;
@@ -1679,7 +1750,8 @@ function saveTemplates() {
 }
 
 function resetTemplates() {
-  localStorage.removeItem("outreach_templates");
+  _templatesCache = null;
+  _cloudSync("outreach_templates", null);
   document.getElementById("tpl-ig").value = DEFAULT_TEMPLATES.ig;
   document.getElementById("tpl-email-subject").value = DEFAULT_TEMPLATES.emailSubject;
   document.getElementById("tpl-email-body").value = DEFAULT_TEMPLATES.emailBody;
@@ -1811,7 +1883,8 @@ function logOutreach() {
     const key = getPipelineKey(currentSound);
     if (all[key]) {
       all[key] = { ...all[key], platform, updatedAt: new Date().toISOString() };
-      localStorage.setItem("pipeline_statuses", JSON.stringify(all));
+      _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
     }
   }
 
@@ -1943,23 +2016,14 @@ function parseCSV(text) {
   return rows;
 }
 
-function getScoutsCache() {
-  try { return JSON.parse(localStorage.getItem("scouting_scouts") || "[]"); } catch { return []; }
-}
-function setScoutsCache(scouts) {
-  localStorage.setItem("scouting_scouts", JSON.stringify(scouts));
-}
-
-function getScoutingProjects() {
-  try { return JSON.parse(localStorage.getItem("scouting_projects") || "{}"); } catch { return {}; }
-}
-function setScoutingProjects(projects) {
-  localStorage.setItem("scouting_projects", JSON.stringify(projects));
-}
+function getScoutsCache()           { return _scoutsCache; }
+function setScoutsCache(scouts)    { _scoutsCache = scouts; _cloudSync("scouting_scouts", scouts); }
+function getScoutingProjects()     { return _projectsCache; }
+function setScoutingProjects(obj)  { _projectsCache = obj;  _cloudSync("scouting_projects", obj); }
 
 function refreshScouts() {
   // Clear cache and reload
-  localStorage.removeItem("scouting_scouts");
+  _scoutsCache = [];
   const subtitle = document.getElementById("scouting-subtitle");
   if (subtitle) subtitle.textContent = "Refreshing…";
   loadScouts().then(scouts => {
@@ -2514,4 +2578,7 @@ function deleteScoutProject(encodedName, index) {
 }
 
 // ============ INIT ============
-showDashboard();
+(async () => {
+  await initDataLayer();
+  showDashboard();
+})();

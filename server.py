@@ -10,10 +10,59 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 PORT = int(os.environ.get("PORT", 3000))
 CHARTEX_BASE = "https://api.chartex.com"
+
+# GitHub data storage
+GITHUB_PAT  = os.environ.get("GITHUB_DATA_PAT", "")
+GITHUB_REPO = os.environ.get("GITHUB_DATA_REPO", "")
+GITHUB_API  = "https://api.github.com"
+DATA_KEYS   = ["pipeline_statuses", "scouting_scouts", "scouting_projects", "outreach_templates"]
+
+
+def _gh_headers():
+    return {
+        "Authorization": f"Bearer {GITHUB_PAT}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def github_read(filename):
+    """Return (parsed_data, sha) for a file in the data repo, or (None, None) on 404."""
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{filename}"
+    req = urllib.request.Request(url, headers=_gh_headers())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            body = json.loads(r.read())
+            content = base64.b64decode(body["content"]).decode()
+            return json.loads(content), body["sha"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None, None
+        raise
+
+
+def github_write(filename, data, sha=None):
+    """Upsert a JSON file in the data repo. sha is required when the file already exists."""
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{filename}"
+    payload = {
+        "message": f"update {filename}",
+        "content": base64.b64encode(json.dumps(data, ensure_ascii=False).encode()).decode(),
+    }
+    if sha:
+        payload["sha"] = sha
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        method="PUT",
+        headers={**_gh_headers(), "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
 APP_ID = os.environ.get("CHARTEX_APP_ID", "oisin_IgEZfiJk")
 APP_TOKEN = os.environ.get("CHARTEX_APP_TOKEN", "uvGc0rEopiiAuVN7i7NRLL_ULptr--QAyzUrcDC0q-Y")
 
@@ -67,8 +116,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/api/data":
+            self.handle_data_write()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def do_GET(self):
-        if self.path.startswith("/api/spotify-track"):
+        if self.path == "/api/data":
+            self.handle_data_read()
+        elif self.path.startswith("/api/spotify-track"):
             self.handle_spotify_track()
         elif self.path.startswith("/api/"):
             self.proxy_chartex()
@@ -82,6 +147,51 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.path = "/index.html"
             # Disable caching for dev
             super().do_GET()
+
+    def handle_data_read(self):
+        """GET /api/data — returns all 4 data keys from the GitHub repo in one response."""
+        if not GITHUB_PAT or not GITHUB_REPO:
+            self.send_json(200, {k: None for k in DATA_KEYS})
+            return
+        try:
+            def fetch_one(key):
+                data, _ = github_read(f"{key}.json")
+                return data
+
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                results = list(ex.map(fetch_one, DATA_KEYS))
+
+            self.send_json(200, dict(zip(DATA_KEYS, results)))
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_data_write(self):
+        """POST /api/data — writes one key to the GitHub repo."""
+        if not GITHUB_PAT or not GITHUB_REPO:
+            self.send_json(503, {"error": "GitHub data storage not configured"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length))
+            key = body.get("key", "")
+            data = body.get("data")
+            if key not in DATA_KEYS:
+                self.send_json(400, {"error": f"Unknown key: {key}"})
+                return
+            filename = f"{key}.json"
+            _, sha = github_read(filename)
+            try:
+                github_write(filename, data, sha)
+            except urllib.error.HTTPError as e:
+                if e.code == 409:
+                    # SHA conflict from concurrent write — retry with fresh SHA
+                    _, sha = github_read(filename)
+                    github_write(filename, data, sha)
+                else:
+                    raise
+            self.send_json(200, {"ok": True})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
 
     def handle_livereload(self):
         """Return a hash of all public files so the client can detect changes."""
