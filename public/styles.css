@@ -2088,13 +2088,13 @@ header h1 {
   /* Switch table to auto-layout so columns shrink naturally */
   .crm-table { table-layout: auto; }
 
-  /* Hide Date column (col 1) */
+  /* Hide Date column (col 1) — use .crm-main-row to avoid hiding the expand panel's colspan td */
   .crm-table th:nth-child(1),
-  .crm-table td:nth-child(1) { display: none; }
+  .crm-main-row td:nth-child(1) { display: none; }
 
   /* Hide Song column (col 3) */
   .crm-table th:nth-child(3),
-  .crm-table td:nth-child(3) { display: none; }
+  .crm-main-row td:nth-child(3) { display: none; }
 
   /* Hide Follow-up from the main row header + cells (still visible in expand) */
   .crm-table thead th:nth-child(5),
