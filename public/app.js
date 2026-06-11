@@ -500,6 +500,7 @@ function setQuickAddStatus(msg, type) {
 
 let _crmFilter = "all";
 let _crmOpenRows = new Set(); // indices of currently expanded rows
+let _crmEntryKeys = [];       // entry key by render index — avoids inline JS quoting bugs
 
 function setCRMFilter(value) {
   _crmFilter = value;
@@ -541,6 +542,8 @@ function renderCRMTable() {
   table.hidden = false;
   empty.hidden = true;
 
+  _crmEntryKeys = entries.map(e => e.key);
+
   tbody.innerHTML = entries.map((entry, idx) => {
     const [keyArtist, keySong] = entry.key.split("|||");
     const artist = entry.artist || keyArtist || "Unknown";
@@ -563,7 +566,6 @@ function renderCRMTable() {
     const followUpVal = entry.followUpDate || "";
     const followUpClass = followUpVal ? "crm-followup has-date" : "crm-followup";
 
-    const encodedKey = escHtml(entry.key);
     const expandId = `crm-expand-${idx}`;
     const chevId = `crm-chev-${idx}`;
 
@@ -571,7 +573,7 @@ function renderCRMTable() {
     const contactHtml = `
       <div class="crm-outreach-inline" onclick="event.stopPropagation()">
         <select class="crm-outreach-sel"
-          onchange="crmOutreachPlatformChange('${encodedKey}', this.value, this)">
+          onchange="crmOutreachPlatformChange(${idx}, this.value, this)">
           <option value=""${!platform ? " selected" : ""}>— not set</option>
           <option value="Email"${platform === "Email" ? " selected" : ""}>Email</option>
           <option value="IG"${platform === "IG" ? " selected" : ""}>Instagram</option>
@@ -580,7 +582,7 @@ function renderCRMTable() {
           placeholder="${platform === "IG" ? "@handle" : "email address"}"
           value="${escHtml(contactInfo)}"
           ${!platform ? "hidden" : ""}
-          onblur="crmSetOutreachContact('${encodedKey}', this.value, this)"
+          onblur="crmSetOutreachContact(${idx}, this.value, this)"
           onkeydown="if(event.key==='Enter')this.blur()">
         ${platform === "IG" && contactInfo
           ? `<a href="https://www.instagram.com/${escHtml(contactInfo.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-outreach-link" title="Open profile">↗</a>`
@@ -590,12 +592,12 @@ function renderCRMTable() {
     // IG field helpers
     const igArtistHtml = igArtist
       ? `<a href="https://www.instagram.com/${escHtml(igArtist.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link" onclick="event.stopPropagation()">@${escHtml(igArtist.replace(/^@/, ""))}</a>
-         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igArtist')" title="Edit">✎</button>`
-      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igArtist')">+ add</button>`;
+         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG(${idx},'igArtist')" title="Edit">✎</button>`
+      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG(${idx},'igArtist')">+ add</button>`;
     const igManagerHtml = igManager
       ? `<a href="https://www.instagram.com/${escHtml(igManager.replace(/^@/, ""))}" target="_blank" rel="noopener" class="crm-ig-link" onclick="event.stopPropagation()">@${escHtml(igManager.replace(/^@/, ""))}</a>
-         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igManager')" title="Edit">✎</button>`
-      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG('${encodedKey}','igManager')">+ add</button>`;
+         <button class="crm-ig-edit" onclick="event.stopPropagation();crmEditIG(${idx},'igManager')" title="Edit">✎</button>`
+      : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG(${idx},'igManager')">+ add</button>`;
 
     return `
     <tr class="crm-main-row" onclick="toggleCRMExpand(${idx})">
@@ -603,14 +605,14 @@ function renderCRMTable() {
       <td class="crm-artist">${escHtml(artist)}</td>
       <td class="crm-song">${escHtml(song)}</td>
       <td onclick="event.stopPropagation()">
-        <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange('${encodedKey}', this.value)">
+        <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange(${idx}, this.value)">
           ${PIPELINE_STAGES.map(st => `<option value="${st.key}"${st.key === status ? " selected" : ""}>${st.label}</option>`).join("")}
         </select>
       </td>
       <td onclick="event.stopPropagation()">
         ${followUpVal
           ? `<input type="date" class="crm-followup has-date" value="${escHtml(followUpVal)}"
-              onchange="setFollowUpDate('${encodedKey}', this.value)"
+              onchange="setFollowUpDate(${idx}, this.value)"
               onfocus="this.showPicker && this.showPicker()">`
           : ``}
       </td>
@@ -637,24 +639,24 @@ function renderCRMTable() {
             <span class="crm-expand-label">Follow-up</span>
             <span class="crm-expand-value">
               <input type="date" class="${followUpClass}" value="${escHtml(followUpVal)}"
-                onchange="setFollowUpDate('${encodedKey}', this.value)"
+                onchange="setFollowUpDate(${idx}, this.value)"
                 onfocus="this.showPicker && this.showPicker()">
             </span>
           </div>
           <div class="crm-expand-field">
             <span class="crm-expand-label">Links</span>
             <span class="crm-expand-value">
-              <div class="crm-links-inner">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink('${encodedKey}')" title="Add link">+</button></div>
+              <div class="crm-links-inner">${tiktokHtml}${spotifyHtml}<button class="crm-add-link-btn" onclick="crmAddLink(${idx})" title="Add link">+</button></div>
             </span>
           </div>
           <div class="crm-expand-field crm-expand-field--notes">
             <span class="crm-expand-label">Notes</span>
             <textarea class="crm-expand-notes" placeholder="Add a note…"
-              onblur="setCRMNote('${encodedKey}', this.value)"
+              onblur="setCRMNote(${idx}, this.value)"
             >${escHtml(entry.notes || "")}</textarea>
           </div>
           <div class="crm-expand-actions">
-            <button class="crm-delete-btn" onclick="crmDeleteEntry('${encodedKey}')" title="Remove entry">🗑 Remove</button>
+            <button class="crm-delete-btn" onclick="crmDeleteEntry(${idx})" title="Remove entry">🗑 Remove</button>
           </div>
         </div>
       </td>
@@ -672,7 +674,9 @@ function renderCRMTable() {
   });
 }
 
-function crmOutreachPlatformChange(key, platform, selectEl) {
+function crmOutreachPlatformChange(idx, platform, selectEl) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key].platform = platform || null;
@@ -694,7 +698,9 @@ function crmOutreachPlatformChange(key, platform, selectEl) {
   if (oldLink) oldLink.remove();
 }
 
-function crmSetOutreachContact(key, value, input) {
+function crmSetOutreachContact(idx, value, input) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   const trimmed = value.trim().replace(/^@/, "");
@@ -729,7 +735,9 @@ function toggleCRMExpand(idx) {
   if (opening) _crmOpenRows.add(idx); else _crmOpenRows.delete(idx);
 }
 
-function crmEditIG(key, field) {
+function crmEditIG(idx, field) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   const current = all[key][field] || "";
@@ -743,7 +751,9 @@ function crmEditIG(key, field) {
   renderCRMTable();
 }
 
-function crmAddLink(key) {
+function crmAddLink(idx) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const url = prompt("Paste a Spotify or TikTok link:");
   if (!url || !url.trim()) return;
   const link = url.trim();
@@ -801,7 +811,9 @@ function showEmailContact(btn, email) {
   }, 0);
 }
 
-function crmStatusChange(key, newStatus) {
+function crmStatusChange(idx, newStatus) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key] = { ...all[key], status: newStatus, updatedAt: new Date().toISOString() };
@@ -829,7 +841,9 @@ function crmStatusChange(key, newStatus) {
 }
 
 
-function setFollowUpDate(key, date) {
+function setFollowUpDate(idx, date) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   all[key] = { ...all[key], followUpDate: date || null, updatedAt: new Date().toISOString() };
@@ -846,7 +860,9 @@ function setFollowUpDate(key, date) {
   }).catch(() => {});
 }
 
-function setCRMNote(key, note) {
+function setCRMNote(idx, note) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
   const trimmed = note.trim();
@@ -863,7 +879,9 @@ function setCRMNote(key, note) {
 }
 
 
-async function crmDeleteEntry(key) {
+async function crmDeleteEntry(idx) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
   const all = getAllPipelineStatuses();
   const entry = all[key];
   if (!entry) return;
