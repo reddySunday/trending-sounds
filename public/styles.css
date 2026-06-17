@@ -946,7 +946,9 @@ header h1 {
 .crm-expand-actions {
   grid-column: 1 / -1;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
   padding-top: 4px;
 }
 
@@ -955,6 +957,74 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ---- Follow-up: copy button, row flag, toast ---- */
+.crm-followup-btn {
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border: 1px solid var(--border, #d8dee9);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue, #3b82f6);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .05s;
+}
+.crm-followup-btn:hover { background: var(--blue-pale, #eef4ff); border-color: var(--blue, #3b82f6); }
+.crm-followup-btn:active { transform: scale(.97); }
+.crm-followup-btn.is-due {
+  background: #fff4e6;
+  border-color: #f97316;
+  color: #c2570c;
+}
+.crm-followup-btn.is-due:hover { background: #ffe8cc; }
+
+.crm-followup-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: #c2570c;
+  background: #fff4e6;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.crm-main-row.crm-row-due { background: rgba(249, 115, 22, 0.05); }
+.crm-main-row.crm-row-due:hover { background: rgba(249, 115, 22, 0.09); }
+
+.crm-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(20px);
+  background: #1e293b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 12px 18px;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s, transform .2s;
+  z-index: 4000;
+  max-width: 90vw;
+  text-align: center;
+}
+.crm-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ============ FILTER BAR ============ */

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=11">
+  <link rel="stylesheet" href="/styles.css?v=12">
 </head>
 <body>
   <!-- Top nav -->
@@ -113,6 +113,7 @@
       <div class="crm-filter-bar">
         <select id="crm-status-filter" class="crm-status-select" onchange="setCRMFilter(this.value)">
           <option value="all">All statuses</option>
+          <option value="needs-followup">⏰ Needs follow-up</option>
           <option value="new">New</option>
           <option value="contacted">Contacted</option>
           <option value="no-reply">No Reply</option>
@@ -513,6 +514,12 @@
           <textarea id="tpl-email-body" class="template-textarea" rows="14"></textarea>
         </div>
 
+        <div class="template-section">
+          <label class="filter-heading">Follow-up Template</label>
+          <p class="template-hint">Copied from the Outreach Log when an artist hasn't replied. Use <code>{artist}</code> and <code>{song}</code> as placeholders</p>
+          <textarea id="tpl-followup" class="template-textarea" rows="4"></textarea>
+        </div>
+
         <div class="template-actions">
           <button class="btn btn-primary" onclick="saveTemplates()">Save Templates</button>
           <button class="btn btn-secondary" onclick="resetTemplates()">Reset to Defaults</button>
@@ -594,7 +601,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=20"></script>
+  <script src="/app.js?v=21"></script>
 
   <!-- Particle network background -->
   <script>

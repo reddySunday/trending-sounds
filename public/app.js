@@ -496,6 +496,8 @@ function submitQuickAdd(sendOutreach) {
       allAfter[outreachKey].platform = outreachPlatform;
       allAfter[outreachKey].contactInfo = contact;
       allAfter[outreachKey].updatedAt = new Date().toISOString();
+      allAfter[outreachKey].contactedAt = allAfter[outreachKey].updatedAt;
+      allAfter[outreachKey].lastFollowUpAt = null;
       _pipelineCache = allAfter;
       _cloudSync("pipeline_statuses", allAfter);
       // Sync to sheet
@@ -569,6 +571,72 @@ let _crmFilter = "all";
 let _crmOpenRows = new Set(); // indices of currently expanded rows
 let _crmEntryKeys = [];       // entry key by render index — avoids inline JS quoting bugs
 
+// ---- Follow-up flagging ----
+// An entry "needs follow-up" when it's been sitting in Contacted/No Reply for
+// 24h+ without a reply. The clock resets each time you copy a follow-up.
+const FOLLOWUP_AGE_MS = 24 * 60 * 60 * 1000;
+const FOLLOWUP_STATUSES = ["contacted", "no-reply"];
+
+function _lastTouchTime(entry) {
+  // Most recent "we reached out" moment. lastFollowUpAt/contactedAt are set only
+  // on real outreach events, so editing notes etc. won't reset the 24h clock.
+  const t = entry.lastFollowUpAt || entry.contactedAt || entry.updatedAt || entry.dateAdded;
+  return t ? new Date(t).getTime() : 0;
+}
+
+function needsFollowUp(entry) {
+  if (!entry || !FOLLOWUP_STATUSES.includes(entry.status || "")) return false;
+  const t = _lastTouchTime(entry);
+  if (!t) return false;
+  return (Date.now() - t) >= FOLLOWUP_AGE_MS;
+}
+
+// Lightweight transient toast (survives table re-render)
+function crmToast(msg) {
+  let el = document.getElementById("crm-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "crm-toast";
+    el.className = "crm-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(crmToast._t);
+  crmToast._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+async function copyFollowUp(idx) {
+  const key = _crmEntryKeys[idx];
+  if (!key) return;
+  const all = getAllPipelineStatuses();
+  const entry = all[key];
+  if (!entry) return;
+  const [keyArtist, keySong] = key.split("|||");
+  const artist = entry.artist || keyArtist || "";
+  const song = entry.songName || keySong || "";
+  const tpl = getTemplates();
+  const msg = (tpl.followUp || DEFAULT_TEMPLATES.followUp)
+    .replace(/\{artist\}/g, artist)
+    .replace(/\{song\}/g, song);
+
+  try {
+    await navigator.clipboard.writeText(msg);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = msg; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+  }
+
+  // Mark as followed-up so it stops flagging for another 24h
+  entry.lastFollowUpAt = new Date().toISOString();
+  _pipelineCache = all;
+  _cloudSync("pipeline_statuses", all);
+
+  crmToast("✓ Follow-up copied — open the Outlook thread, hit Reply, paste & send");
+  renderCRMTable();
+}
+
 function setCRMFilter(value) {
   _crmFilter = value;
   const sel = document.getElementById("crm-status-filter");
@@ -593,7 +661,9 @@ function renderCRMTable() {
     .map(([key, val]) => ({ key, ...val }))
     .sort((a, b) => (b.dateAdded || b.updatedAt || "").localeCompare(a.dateAdded || a.updatedAt || ""));
 
-  if (_crmFilter !== "all") {
+  if (_crmFilter === "needs-followup") {
+    entries = entries.filter(e => needsFollowUp(e));
+  } else if (_crmFilter !== "all") {
     entries = entries.filter(e => (e.status || "new") === _crmFilter);
   }
 
@@ -633,6 +703,9 @@ function renderCRMTable() {
     const followUpVal = entry.followUpDate || "";
     const followUpClass = followUpVal ? "crm-followup has-date" : "crm-followup";
 
+    const dueFollowUp = needsFollowUp(entry);
+    const flagHtml = dueFollowUp ? `<span class="crm-followup-flag" title="No reply for 24h+ — time to follow up">⏰ Follow up</span>` : "";
+
     const expandId = `crm-expand-${idx}`;
     const chevId = `crm-chev-${idx}`;
 
@@ -667,9 +740,9 @@ function renderCRMTable() {
       : `<button class="crm-ig-add" onclick="event.stopPropagation();crmEditIG(${idx},'igManager')">+ add</button>`;
 
     return `
-    <tr class="crm-main-row" onclick="toggleCRMExpand(${idx})">
+    <tr class="crm-main-row${dueFollowUp ? " crm-row-due" : ""}" onclick="toggleCRMExpand(${idx})">
       <td class="crm-date">${escHtml(dateStr)}</td>
-      <td class="crm-artist">${escHtml(artist)}</td>
+      <td class="crm-artist">${escHtml(artist)}${flagHtml}</td>
       <td class="crm-song">${escHtml(song)}</td>
       <td onclick="event.stopPropagation()">
         <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange(${idx}, this.value)">
@@ -723,6 +796,7 @@ function renderCRMTable() {
             >${escHtml(entry.notes || "")}</textarea>
           </div>
           <div class="crm-expand-actions">
+            <button class="crm-followup-btn${dueFollowUp ? " is-due" : ""}" onclick="event.stopPropagation();copyFollowUp(${idx})" title="Copy the follow-up message — then reply in the Outlook thread">📋 Copy follow-up</button>
             <button class="crm-delete-btn" onclick="crmDeleteEntry(${idx})" title="Remove entry">🗑 Remove</button>
           </div>
         </div>
@@ -887,7 +961,13 @@ function crmStatusChange(idx, newStatus) {
   if (!key) return;
   const all = getAllPipelineStatuses();
   if (!all[key]) return;
-  all[key] = { ...all[key], status: newStatus, updatedAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  all[key] = { ...all[key], status: newStatus, updatedAt: now };
+  // Reset the follow-up clock when (re)entering an outreach state
+  if (FOLLOWUP_STATUSES.includes(newStatus)) {
+    all[key].contactedAt = now;
+    all[key].lastFollowUpAt = null;
+  }
   _pipelineCache = all;
   _cloudSync("pipeline_statuses", all);
   // Sync to sheet
@@ -910,6 +990,8 @@ function crmStatusChange(idx, newStatus) {
       sel.style.setProperty("--badge-color", stage.color);
     }
   }
+  // Keep the "Needs follow-up" view accurate as statuses change
+  if (_crmFilter === "needs-followup") renderCRMTable();
 }
 
 
@@ -1708,7 +1790,8 @@ function switchTab(type) {
 const DEFAULT_TEMPLATES = {
   ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
   emailSubject: `{artist} x SUNDAY`,
-  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater (Native Remedies Remix) https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`
+  emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater (Native Remedies Remix) https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`,
+  followUp: `Hi {artist}, just circling back on this. I know you're probably busy but let me know!`
 };
 
 // Open Outlook Web compose with subject + plain-text body.
@@ -1728,6 +1811,7 @@ function showTemplateEditor() {
   document.getElementById("tpl-ig").value = tpl.ig;
   document.getElementById("tpl-email-subject").value = tpl.emailSubject;
   document.getElementById("tpl-email-body").value = tpl.emailBody;
+  document.getElementById("tpl-followup").value = tpl.followUp || DEFAULT_TEMPLATES.followUp;
   document.getElementById("template-editor").hidden = false;
 }
 
@@ -1740,6 +1824,7 @@ function saveTemplates() {
     ig: document.getElementById("tpl-ig").value,
     emailSubject: document.getElementById("tpl-email-subject").value,
     emailBody: document.getElementById("tpl-email-body").value,
+    followUp: document.getElementById("tpl-followup").value,
   };
   _templatesCache = tpl;
   _cloudSync("outreach_templates", tpl);
@@ -1755,6 +1840,7 @@ function resetTemplates() {
   document.getElementById("tpl-ig").value = DEFAULT_TEMPLATES.ig;
   document.getElementById("tpl-email-subject").value = DEFAULT_TEMPLATES.emailSubject;
   document.getElementById("tpl-email-body").value = DEFAULT_TEMPLATES.emailBody;
+  document.getElementById("tpl-followup").value = DEFAULT_TEMPLATES.followUp;
   const fb = document.getElementById("tpl-feedback");
   fb.textContent = "Reset to defaults!";
   fb.hidden = false;
