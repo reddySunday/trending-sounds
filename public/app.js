@@ -572,10 +572,12 @@ let _crmOpenRows = new Set(); // indices of currently expanded rows
 let _crmEntryKeys = [];       // entry key by render index — avoids inline JS quoting bugs
 
 // ---- Follow-up flagging ----
-// An entry "needs follow-up" when it's been sitting in Contacted/No Reply for
-// 24h+ without a reply. The clock resets each time you copy a follow-up.
+// An entry "needs follow-up" only while you're actively awaiting a reply, i.e.
+// status is Contacted, and it's sat there 24h+. Ghosted / No Reply / Passed /
+// Already Signed / Replied etc. are never chased. The clock resets each time you
+// copy a follow-up.
 const FOLLOWUP_AGE_MS = 24 * 60 * 60 * 1000;
-const FOLLOWUP_STATUSES = ["contacted", "no-reply"];
+const FOLLOWUP_STATUSES = ["contacted"];
 
 function _lastTouchTime(entry) {
   // Most recent "we reached out" moment. lastFollowUpAt/contactedAt are set only
