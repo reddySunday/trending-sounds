@@ -984,16 +984,9 @@ function crmStatusChange(idx, newStatus) {
       notes: all[key].notes || "",
     }),
   }).catch(() => {});
-  // Update status badge color
-  const stage = PIPELINE_STAGES.find(s => s.key === newStatus);
-  if (stage) {
-    const sel = document.activeElement;
-    if (sel && sel.classList.contains("pipeline-select")) {
-      sel.style.setProperty("--badge-color", stage.color);
-    }
-  }
-  // Keep the "Needs follow-up" view accurate as statuses change
-  if (_crmFilter === "needs-followup") renderCRMTable();
+  // Re-render so the follow-up flag, row tint, badge colour and any active
+  // filter immediately reflect the new status.
+  renderCRMTable();
 }
 
 
