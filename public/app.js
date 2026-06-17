@@ -630,13 +630,28 @@ async function copyFollowUp(idx) {
     document.execCommand("copy"); document.body.removeChild(ta);
   }
 
-  // Mark as followed-up so it stops flagging for another 24h
+  // Mark as followed-up so it stops flagging for another 24h, and stamp the
+  // visible follow-up date with today.
+  const today = _todayLocal();
   entry.lastFollowUpAt = new Date().toISOString();
+  entry.followUpDate = today;
   _pipelineCache = all;
   _cloudSync("pipeline_statuses", all);
 
+  // Mirror the follow-up date to the sheet backup
+  fetch(SHEET_WEBHOOK, {
+    method: "POST",
+    body: JSON.stringify({ action: "setFollowUpDate", soundName: song, artist, followUpDate: today }),
+  }).catch(() => {});
+
   crmToast("✓ Follow-up copied — open the Outlook thread, hit Reply, paste & send");
   renderCRMTable();
+}
+
+// Local YYYY-MM-DD (avoids the UTC off-by-one of toISOString near midnight)
+function _todayLocal() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
 function setCRMFilter(value) {
@@ -706,7 +721,7 @@ function renderCRMTable() {
     const followUpClass = followUpVal ? "crm-followup has-date" : "crm-followup";
 
     const dueFollowUp = needsFollowUp(entry);
-    const flagHtml = dueFollowUp ? `<span class="crm-followup-flag" title="No reply for 24h+ — time to follow up">⏰ Follow up</span>` : "";
+    const flagHtml = dueFollowUp ? `<span class="crm-followup-flag" title="No reply for 24h+ — time to follow up">Follow up</span>` : "";
 
     const expandId = `crm-expand-${idx}`;
     const chevId = `crm-chev-${idx}`;
@@ -1786,7 +1801,7 @@ const DEFAULT_TEMPLATES = {
   ig: `Hey {artist} - really excited about {song}!\nI'm Oisín, A&R at SUNDAY (part of the Sony Music family). We focus on scaling records that are already showing strong organic momentum - we recently worked on Kat Slater (Native Remedies Remix) alongside Epic Records UK (30M+ on Spotify).\n\nAre you releasing independently?\nWould be great to connect and hear more about what you're building around this release and explore whether there could be a fit to work together, either on this or future releases.\n\n- Oisín, A&R @ SUNDAY (+45 22560259)`,
   emailSubject: `{artist} x SUNDAY`,
   emailBody: `Hi {artist} & management,\n\nI hope you're well.\n\nMy name is Oisín, and I'm an A&R at SUNDAY, part of the Sony Music family. We focus on scaling records that are already showing strong organic momentum - recently we worked on Kat Slater (Native Remedies Remix) https://open.spotify.com/track/0lkEQmDMMgoNIKL7drwOzA alongside Epic Records UK (30M+ streams on Spotify).\n\nI came across "{song}" on TikTok and really enjoyed it - it's a great record, and the reaction around it feels genuine and exciting.\n\nIs it independently released?\nI'd be interested in exploring whether there could be a fit of working together - either around this record or future releases.\n\nHappy to set up a call to discuss further.\n\nBest,`,
-  followUp: `Hi {artist}, just circling back on this. I know you're probably busy but let me know!`
+  followUp: `Hi, just circling back on this. I know you're probably busy but let me know!`
 };
 
 // Open Outlook Web compose with subject + plain-text body.
