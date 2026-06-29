@@ -568,6 +568,7 @@ function setQuickAddStatus(msg, type) {
 // ============ CRM TABLE ============
 
 let _crmFilter = "all";
+let _crmSearch = "";          // free-text artist/song search
 let _crmOpenRows = new Set(); // indices of currently expanded rows
 let _crmEntryKeys = [];       // entry key by render index — avoids inline JS quoting bugs
 
@@ -665,6 +666,13 @@ function setCRMFilterByKey(key) {
   setCRMFilter(key);
 }
 
+function setCRMSearch(value) {
+  _crmSearch = (value || "").trim().toLowerCase();
+  // Don't collapse expanded rows mid-search — but indices shift, so reset
+  _crmOpenRows = new Set();
+  renderCRMTable();
+}
+
 function updateCRMSubtitle() {
   const all = getAllPipelineStatuses();
   const count = Object.keys(all).length;
@@ -684,6 +692,14 @@ function renderCRMTable() {
     entries = entries.filter(e => (e.status || "new") === _crmFilter);
   }
 
+  if (_crmSearch) {
+    entries = entries.filter(e => {
+      const [kArtist, kSong] = e.key.split("|||");
+      const hay = `${e.artist || kArtist || ""} ${e.songName || kSong || ""}`.toLowerCase();
+      return hay.includes(_crmSearch);
+    });
+  }
+
   const empty = document.getElementById("crm-empty");
   const table = document.getElementById("crm-table");
   const tbody = document.getElementById("crm-table-body");
@@ -691,6 +707,9 @@ function renderCRMTable() {
   if (entries.length === 0) {
     table.hidden = true;
     empty.hidden = false;
+    empty.textContent = (_crmSearch || _crmFilter !== "all")
+      ? "No matching artists."
+      : "No entries yet. Add an artist from the Dashboard.";
     return;
   }
   table.hidden = false;

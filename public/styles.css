@@ -473,6 +473,32 @@ header h1 {
   flex-shrink: 0;
 }
 
+.crm-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3Cpath d='M10 10l3 3'/%3E%3C/svg%3E")
+    no-repeat left 11px center;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: var(--shadow-sm);
+}
+
+.crm-search::placeholder { color: var(--text-dim, #94a3b8); }
+
+.crm-search:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.crm-search:hover { border-color: var(--border-hover); }
+
 .crm-status-select {
   appearance: none;
   -webkit-appearance: none;

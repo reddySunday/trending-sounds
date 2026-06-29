@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=12">
+  <link rel="stylesheet" href="/styles.css?v=13">
 </head>
 <body>
   <!-- Top nav -->
@@ -111,6 +111,8 @@
 
       <!-- CRM filter bar -->
       <div class="crm-filter-bar">
+        <input id="crm-search" class="crm-search" type="search" placeholder="Search artist or song…"
+          autocomplete="off" oninput="setCRMSearch(this.value)">
         <select id="crm-status-filter" class="crm-status-select" onchange="setCRMFilter(this.value)">
           <option value="all">All statuses</option>
           <option value="needs-followup">Needs follow-up</option>
@@ -601,7 +603,7 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=24"></script>
+  <script src="/app.js?v=25"></script>
 
   <!-- Particle network background -->
   <script>
