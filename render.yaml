@@ -2,10 +2,20 @@ services:
   - type: web
     name: trending-sounds
     runtime: python
-    buildCommand: echo "No build needed"
+    buildCommand: pip install -r requirements.txt
     startCommand: python3 server.py
     envVars:
       - key: CHARTEX_APP_ID
         sync: false
       - key: CHARTEX_APP_TOKEN
+        sync: false
+      - key: GITHUB_DATA_PAT
+        sync: false
+      - key: GITHUB_DATA_REPO
+        sync: false
+      - key: AAD_CLIENT_ID
+        sync: false
+      - key: AAD_TENANT_ID
+        sync: false
+      - key: OWNER_EMAIL
         sync: false

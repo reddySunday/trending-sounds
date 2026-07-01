@@ -4,9 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=13">
+  <link rel="stylesheet" href="/styles.css?v=14">
 </head>
 <body>
+  <!-- Login screen (shown until signed in) -->
+  <div id="login-screen" hidden>
+    <div class="login-card">
+      <div class="login-brand">SUNDAY A&amp;R</div>
+      <h1>Trending Sounds</h1>
+      <p>Sign in with your SUNDAY Microsoft account to access your outreach pipeline.</p>
+      <button class="login-btn" onclick="signIn()">Sign in with Microsoft</button>
+    </div>
+  </div>
+
   <!-- Top nav -->
   <nav class="top-nav">
     <div class="nav-brand">SUNDAY A&amp;R</div>
@@ -16,6 +26,7 @@
       <button class="nav-btn" data-page="scouting" onclick="showScouting()">Scouting Network</button>
       <button class="nav-btn" data-page="discover" onclick="showDiscover()">Discover</button>
     </div>
+    <div id="user-chip" class="user-chip" hidden></div>
   </nav>
 
   <!-- Animated background -->
@@ -603,7 +614,8 @@
     <button id="gd-email">Email</button>
   </div>
 
-  <script src="/app.js?v=25"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+  <script src="/app.js?v=26"></script>
 
   <!-- Particle network background -->
   <script>

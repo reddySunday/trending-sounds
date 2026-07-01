@@ -13,6 +13,13 @@ import urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+try:
+    import jwt
+    from jwt import PyJWKClient
+except ImportError:  # PyJWT not installed yet — /api/* auth will reject until deps are present
+    jwt = None
+    PyJWKClient = None
+
 PORT = int(os.environ.get("PORT", 3000))
 CHARTEX_BASE = "https://api.chartex.com"
 
@@ -21,6 +28,60 @@ GITHUB_PAT  = os.environ.get("GITHUB_DATA_PAT", "")
 GITHUB_REPO = os.environ.get("GITHUB_DATA_REPO", "")
 GITHUB_API  = "https://api.github.com"
 DATA_KEYS   = ["pipeline_statuses", "scouting_scouts", "scouting_projects", "outreach_templates"]
+
+# Microsoft Entra ID (single-tenant) auth
+AAD_CLIENT_ID = os.environ.get("AAD_CLIENT_ID", "")
+AAD_TENANT_ID = os.environ.get("AAD_TENANT_ID", "")
+OWNER_EMAIL   = os.environ.get("OWNER_EMAIL", "").lower()
+# Accept both the App ID URI and bare client id as audience, and both v2/v1 issuers,
+# so validation works regardless of the app manifest's accessTokenAcceptedVersion.
+_AUDIENCES  = [f"api://{AAD_CLIENT_ID}", AAD_CLIENT_ID]
+_ISSUER_V2  = f"https://login.microsoftonline.com/{AAD_TENANT_ID}/v2.0"
+_ISSUER_V1  = f"https://sts.windows.net/{AAD_TENANT_ID}/"
+_jwks_client = None
+# When AAD isn't configured (local dev, or a pre-Azure deploy) the app runs
+# unauthenticated against the legacy shared dataset — nothing breaks until the
+# env vars are set, at which point per-user isolation switches on automatically.
+AUTH_ENABLED = bool(AAD_CLIENT_ID and AAD_TENANT_ID and jwt)
+
+
+def _get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None and PyJWKClient and AAD_TENANT_ID:
+        _jwks_client = PyJWKClient(
+            f"https://login.microsoftonline.com/{AAD_TENANT_ID}/discovery/v2.0/keys"
+        )
+    return _jwks_client
+
+
+def validate_bearer(auth_header):
+    """Validate a Microsoft access token. Return {oid, email, name} or None."""
+    if not (jwt and AAD_CLIENT_ID and AAD_TENANT_ID):
+        return None
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:]
+    try:
+        client = _get_jwks_client()
+        key = client.get_signing_key_from_jwt(token).key
+        claims = jwt.decode(
+            token, key, algorithms=["RS256"], audience=_AUDIENCES,
+            options={"verify_iss": False},  # issuer checked manually to allow v1 or v2
+        )
+        if claims.get("iss") not in (_ISSUER_V2, _ISSUER_V1):
+            return None
+        if claims.get("tid") and claims["tid"] != AAD_TENANT_ID:
+            return None  # defense-in-depth: reject other tenants
+        oid = claims.get("oid") or claims.get("sub")
+        if not oid:
+            return None
+        return {
+            "oid": oid,
+            "email": (claims.get("preferred_username") or claims.get("email") or "").lower(),
+            "name": claims.get("name", ""),
+        }
+    except Exception:
+        return None
 
 
 def _gh_headers():
@@ -123,21 +184,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def _authed_user(self):
+        """Return a user dict for the request, or None if a required token is invalid.
+        When AUTH_ENABLED is False, returns a legacy user bound to the shared dataset."""
+        if not AUTH_ENABLED:
+            return {"oid": None, "email": OWNER_EMAIL, "legacy": True}
+        return validate_bearer(self.headers.get("Authorization"))
+
     def do_POST(self):
         if self.path == "/api/data":
-            self.handle_data_write()
+            user = self._authed_user()
+            if not user:
+                self.send_json(401, {"error": "unauthorized"})
+                return
+            self.handle_data_write(user)
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_GET(self):
-        if self.path == "/api/data":
-            self.handle_data_read()
-        elif self.path.startswith("/api/spotify-track"):
-            self.handle_spotify_track()
-        elif self.path.startswith("/api/"):
-            self.proxy_chartex()
-        elif self.path == "/__livereload":
+        # Public (no token): the client needs this before it can sign in.
+        if self.path == "/api/auth-config":
+            self.send_json(200, {"clientId": AAD_CLIENT_ID, "tenantId": AAD_TENANT_ID})
+            return
+
+        # Everything else under /api/* requires a valid Microsoft token (when auth is on).
+        if self.path.startswith("/api/"):
+            user = self._authed_user()
+            if not user:
+                self.send_json(401, {"error": "unauthorized"})
+                return
+            if self.path == "/api/data":
+                self.handle_data_read(user)
+            elif self.path.startswith("/api/spotify-track"):
+                self.handle_spotify_track()
+            else:
+                self.proxy_chartex()
+            return
+
+        if self.path == "/__livereload":
             self.handle_livereload()
         else:
             # Serve index.html for all non-file routes (SPA)
@@ -148,14 +233,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # Disable caching for dev
             super().do_GET()
 
-    def handle_data_read(self):
-        """GET /api/data — returns all 4 data keys from the GitHub repo in one response."""
+    def handle_data_read(self, user):
+        """GET /api/data — returns all 4 data keys for the signed-in user."""
         if not GITHUB_PAT or not GITHUB_REPO:
             self.send_json(200, {k: None for k in DATA_KEYS})
             return
+        legacy = user.get("legacy")
+        is_owner = bool(OWNER_EMAIL) and user.get("email") == OWNER_EMAIL
         try:
             def fetch_one(key):
-                data, _ = github_read(f"{key}.json")
+                if legacy:
+                    data, _ = github_read(f"{key}.json")
+                    return data
+                data, _ = github_read(f"users/{user['oid']}/{key}.json")
+                # One-time migration: the founding account inherits the legacy
+                # shared root file until its first write persists it per-user.
+                if data is None and is_owner:
+                    data, _ = github_read(f"{key}.json")
                 return data
 
             with ThreadPoolExecutor(max_workers=4) as ex:
@@ -165,8 +259,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_json(500, {"error": str(e)})
 
-    def handle_data_write(self):
-        """POST /api/data — writes one key to the GitHub repo."""
+    def handle_data_write(self, user):
+        """POST /api/data — writes one key for the signed-in user."""
         if not GITHUB_PAT or not GITHUB_REPO:
             self.send_json(503, {"error": "GitHub data storage not configured"})
             return
@@ -178,7 +272,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if key not in DATA_KEYS:
                 self.send_json(400, {"error": f"Unknown key: {key}"})
                 return
-            filename = f"{key}.json"
+            filename = f"{key}.json" if user.get("legacy") else f"users/{user['oid']}/{key}.json"
             _, sha = github_read(filename)
             try:
                 github_write(filename, data, sha)

@@ -1,1 +1,2 @@
-# No external dependencies — uses only Python stdlib
+# Microsoft Entra ID token validation (JWT signature + JWKS)
+PyJWT[crypto]>=2.8.0

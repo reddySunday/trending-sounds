@@ -98,7 +98,87 @@ let activeCRMFilter = "all";
 let quickAddPendingData = null; // { artist, songName, tiktokLink, spotifyLink }
 let currentQAFTab = "email"; // "email" | "instagram" | "none"
 
-// Cloud data layer — in-memory caches backed by GitHub via /api/data
+// ============ AUTH (Microsoft Entra ID via MSAL) ============
+let _msal = null;
+let _authAccount = null;
+let _authRequired = false;      // true once we know AAD is configured server-side
+let API_SCOPE = "";
+let _currentUserEmail = "";
+
+async function initAuth() {
+  // Load public client config, init MSAL, resolve any pending redirect.
+  // Returns the signed-in account, or null (not signed in / auth not configured).
+  let cfg = {};
+  try {
+    cfg = await (await fetch("/api/auth-config")).json();
+  } catch (e) {
+    console.warn("Auth config unavailable", e);
+  }
+  _authRequired = !!(cfg.clientId && cfg.tenantId && window.msal);
+  if (!_authRequired) return null;   // local/dev without AAD → run unauthenticated
+
+  API_SCOPE = `api://${cfg.clientId}/access_as_user`;
+  _msal = new msal.PublicClientApplication({
+    auth: {
+      clientId: cfg.clientId,
+      authority: `https://login.microsoftonline.com/${cfg.tenantId}`,
+      redirectUri: window.location.origin,
+    },
+    cache: { cacheLocation: "sessionStorage" },
+  });
+  await _msal.initialize();
+  const resp = await _msal.handleRedirectPromise();
+  _authAccount = resp?.account || _msal.getAllAccounts()[0] || null;
+  if (_authAccount) {
+    _msal.setActiveAccount(_authAccount);
+    _currentUserEmail = _authAccount.username || "";
+  }
+  return _authAccount;
+}
+
+async function getToken() {
+  if (!_msal || !_authAccount) return null;
+  try {
+    const r = await _msal.acquireTokenSilent({ scopes: [API_SCOPE], account: _authAccount });
+    return r.accessToken;
+  } catch (e) {
+    // Session expired / interaction required — bounce through Microsoft again.
+    await _msal.acquireTokenRedirect({ scopes: [API_SCOPE] });
+    return null; // page is navigating away
+  }
+}
+
+function signIn()  { if (_msal) _msal.loginRedirect({ scopes: [API_SCOPE] }); }
+function signOut() { if (_msal) _msal.logoutRedirect(); }
+
+// fetch() wrapper that attaches the bearer token when signed in.
+async function _apiFetch(path, options = {}) {
+  const token = await getToken();
+  const headers = { ...(options.headers || {}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return fetch(path, { ...options, headers });
+}
+
+// Best-effort: tag every Google Sheets webhook post with the signed-in user so
+// the shared backup sheets can separate A&Rs by a "user" column later. This is a
+// single, tightly-scoped shim so we don't touch all ~17 webhook call sites.
+const _rawFetch = window.fetch.bind(window);
+window.fetch = function (url, options) {
+  if (typeof url === "string" && url.includes("script.google.com/macros")
+      && options && typeof options.body === "string" && _currentUserEmail) {
+    try {
+      const b = JSON.parse(options.body);
+      if (b && typeof b === "object" && !Array.isArray(b) && b.user === undefined) {
+        b.user = _currentUserEmail;
+        options = { ...options, body: JSON.stringify(b) };
+      }
+    } catch {}
+  }
+  return _rawFetch(url, options);
+};
+
+// ============ CLOUD DATA LAYER ============
+// In-memory caches backed by per-user GitHub files via /api/data.
 let _pipelineCache  = {};   // pipeline_statuses
 let _scoutsCache    = [];   // scouting_scouts
 let _projectsCache  = {};   // scouting_projects
@@ -107,32 +187,28 @@ let _syncTimers     = {};   // per-key debounce timers
 
 function _cloudSync(key, data) {
   clearTimeout(_syncTimers[key]);
-  _syncTimers[key] = setTimeout(() => {
-    fetch("/api/data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, data }),
-    }).catch(() => {});
+  _syncTimers[key] = setTimeout(async () => {
+    try {
+      await _apiFetch("/api/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, data }),
+      });
+    } catch {}
   }, 800);
 }
 
 async function initDataLayer() {
   try {
-    const res = await fetch("/api/data");
+    const res = await _apiFetch("/api/data");
     if (!res.ok) throw new Error(`/api/data returned ${res.status}`);
     const store = await res.json();
-    if (store.pipeline_statuses  && !_isEmpty(store.pipeline_statuses))  _pipelineCache  = store.pipeline_statuses;
-    if (store.scouting_scouts    && !_isEmpty(store.scouting_scouts))    _scoutsCache    = store.scouting_scouts;
-    if (store.scouting_projects  && !_isEmpty(store.scouting_projects))  _projectsCache  = store.scouting_projects;
-    if (store.outreach_templates)                                         _templatesCache = store.outreach_templates;
-    await _migrateFromLocalStorage(store);
+    if (!_isEmpty(store.pipeline_statuses))  _pipelineCache  = store.pipeline_statuses;
+    if (!_isEmpty(store.scouting_scouts))    _scoutsCache    = store.scouting_scouts;
+    if (!_isEmpty(store.scouting_projects))  _projectsCache  = store.scouting_projects;
+    if (store.outreach_templates)            _templatesCache = store.outreach_templates;
   } catch (e) {
-    console.warn("Cloud sync unavailable — falling back to localStorage", e);
-    // Populate caches from localStorage as fallback
-    try { _pipelineCache  = JSON.parse(localStorage.getItem("pipeline_statuses")  || "{}"); } catch {}
-    try { _scoutsCache    = JSON.parse(localStorage.getItem("scouting_scouts")    || "[]"); } catch {}
-    try { _projectsCache  = JSON.parse(localStorage.getItem("scouting_projects")  || "{}"); } catch {}
-    try { _templatesCache = JSON.parse(localStorage.getItem("outreach_templates")); }        catch {}
+    console.error("Failed to load cloud data", e);
   }
 }
 
@@ -141,26 +217,6 @@ function _isEmpty(v) {
   if (Array.isArray(v)) return v.length === 0;
   if (typeof v === "object") return Object.keys(v).length === 0;
   return false;
-}
-
-async function _migrateFromLocalStorage(store) {
-  // Push any localStorage data to GitHub if the cloud store is empty for that key
-  const migrations = [
-    ["pipeline_statuses",  store.pipeline_statuses,  v => { _pipelineCache  = v; }],
-    ["scouting_scouts",    store.scouting_scouts,    v => { _scoutsCache    = v; }],
-    ["scouting_projects",  store.scouting_projects,  v => { _projectsCache  = v; }],
-    ["outreach_templates", store.outreach_templates, v => { _templatesCache = v; }],
-  ];
-  for (const [lsKey, cloudVal, setter] of migrations) {
-    if (!_isEmpty(cloudVal)) continue; // already has data in cloud
-    const raw = localStorage.getItem(lsKey);
-    if (!raw) continue;
-    try {
-      const data = JSON.parse(raw);
-      setter(data);
-      _cloudSync(lsKey, data);
-    } catch {}
-  }
 }
 
 // Scouting state
@@ -2692,8 +2748,33 @@ function deleteScoutProject(encodedName, index) {
   renderScoutingStats(scouts);
 }
 
+// ============ LOGIN UI ============
+function showLoginScreen() {
+  const login = document.getElementById("login-screen");
+  const nav = document.querySelector(".top-nav");
+  const app = document.getElementById("app");
+  if (login) login.hidden = false;
+  if (nav) nav.style.display = "none";
+  if (app) app.style.display = "none";
+}
+
+function renderUserChip(account) {
+  const el = document.getElementById("user-chip");
+  if (!el) return;
+  const name = account.name || account.username || "";
+  el.innerHTML = `<span class="user-chip-name" title="${escHtml(account.username || "")}">${escHtml(name)}</span>
+    <button class="user-signout" onclick="signOut()">Sign out</button>`;
+  el.hidden = false;
+}
+
 // ============ INIT ============
 (async () => {
+  const account = await initAuth();
+  if (_authRequired && !account) {
+    showLoginScreen();
+    return;
+  }
+  if (account) renderUserChip(account);
   await initDataLayer();
   showDashboard();
 })();
