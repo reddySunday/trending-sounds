@@ -39,10 +39,18 @@ _AUDIENCES  = [f"api://{AAD_CLIENT_ID}", AAD_CLIENT_ID]
 _ISSUER_V2  = f"https://login.microsoftonline.com/{AAD_TENANT_ID}/v2.0"
 _ISSUER_V1  = f"https://sts.windows.net/{AAD_TENANT_ID}/"
 _jwks_client = None
-# When AAD isn't configured (local dev, or a pre-Azure deploy) the app runs
-# unauthenticated against the legacy shared dataset — nothing breaks until the
-# env vars are set, at which point per-user isolation switches on automatically.
-AUTH_ENABLED = bool(AAD_CLIENT_ID and AAD_TENANT_ID and jwt)
+# Auth is "configured" the moment the AAD env vars are present. When they are NOT
+# set (local dev, or a pre-Azure deploy) the app runs unauthenticated against the
+# legacy shared dataset — nothing breaks until the env vars are added.
+#
+# CRITICAL: if the env vars ARE set but PyJWT is missing, we FAIL CLOSED (reject
+# every /api/* request) instead of silently serving the shared dataset. A broken
+# app is far safer than leaking every user's data to anyone.
+AUTH_CONFIGURED = bool(AAD_CLIENT_ID and AAD_TENANT_ID)
+if AUTH_CONFIGURED and not jwt:
+    print("WARNING: AAD is configured but PyJWT is not installed — all /api/* "
+          "requests will be rejected (fail-closed). Fix the build to run: "
+          "pip install -r requirements.txt")
 
 
 def _get_jwks_client():
@@ -186,8 +194,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _authed_user(self):
         """Return a user dict for the request, or None if a required token is invalid.
-        When AUTH_ENABLED is False, returns a legacy user bound to the shared dataset."""
-        if not AUTH_ENABLED:
+        When auth is NOT configured, returns a legacy user bound to the shared dataset.
+        When auth IS configured, a valid token is mandatory — validate_bearer returns
+        None (→ 401) if the token is bad OR if PyJWT is missing, so we fail closed."""
+        if not AUTH_CONFIGURED:
             return {"oid": None, "email": OWNER_EMAIL, "legacy": True}
         return validate_bearer(self.headers.get("Authorization"))
 
