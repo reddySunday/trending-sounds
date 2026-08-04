@@ -104,6 +104,7 @@ let _authAccount = null;
 let _authRequired = false;      // true once we know AAD is configured server-side
 let API_SCOPE = "";
 let _currentUserEmail = "";
+let _isOwner = false;           // owner (OWNER_EMAIL) keeps the shared scout sheet as a private master list
 
 async function initAuth() {
   // Load public client config, init MSAL, resolve any pending redirect.
@@ -164,15 +165,22 @@ async function _apiFetch(path, options = {}) {
 // single, tightly-scoped shim so we don't touch all ~17 webhook call sites.
 const _rawFetch = window.fetch.bind(window);
 window.fetch = function (url, options) {
-  if (typeof url === "string" && url.includes("script.google.com/macros")
-      && options && typeof options.body === "string" && _currentUserEmail) {
-    try {
-      const b = JSON.parse(options.body);
-      if (b && typeof b === "object" && !Array.isArray(b) && b.user === undefined) {
-        b.user = _currentUserEmail;
-        options = { ...options, body: JSON.stringify(b) };
-      }
-    } catch {}
+  if (typeof url === "string" && url.includes("script.google.com/macros")) {
+    // The scout sheet is the owner's private master list, read back via CSV.
+    // Non-owners must never write to it, or their scouts would leak to the owner.
+    if (url === SCOUT_WEBHOOK && !_isOwner) {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    // Tag posts with the signed-in user so the backup sheets can separate A&Rs.
+    if (options && typeof options.body === "string" && _currentUserEmail) {
+      try {
+        const b = JSON.parse(options.body);
+        if (b && typeof b === "object" && !Array.isArray(b) && b.user === undefined) {
+          b.user = _currentUserEmail;
+          options = { ...options, body: JSON.stringify(b) };
+        }
+      } catch {}
+    }
   }
   return _rawFetch(url, options);
 };
@@ -2100,8 +2108,17 @@ function showScouting() {
   });
 }
 
-// Fetch CSV from Google Sheet, parse, merge with localStorage cache
+// Owner: the Google Sheet is their private master list.
+// Everyone else: fully private, in-app scouts only (never the shared sheet).
 async function loadScouts() {
+  if (!_isOwner) {
+    const all = getScoutsCache();
+    // Keep only the user's own scouts; drop any sheet-derived (_local === false)
+    // entries that were copied in while scouting was shared, and persist the cleanup.
+    const own = all.filter(s => s._local !== false);
+    if (own.length !== all.length) setScoutsCache(own);
+    return own;
+  }
   // Try to fetch fresh data from the sheet
   try {
     const resp = await fetch(SCOUT_SHEET_CSV);
@@ -2193,8 +2210,9 @@ function getScoutingProjects()     { return _projectsCache; }
 function setScoutingProjects(obj)  { _projectsCache = obj;  _cloudSync("scouting_projects", obj); }
 
 function refreshScouts() {
-  // Clear cache and reload
-  _scoutsCache = [];
+  // Only the owner re-pulls from the sheet; clearing a non-owner's cache would
+  // momentarily blank their own scouts.
+  if (_isOwner) _scoutsCache = [];
   const subtitle = document.getElementById("scouting-subtitle");
   if (subtitle) subtitle.textContent = "Refreshing…";
   loadScouts().then(scouts => {
@@ -2717,6 +2735,7 @@ function submitAddScout() {
     communication: document.getElementById("as-comm").value.trim(),
     status:        document.getElementById("as-status").value || "Active",
     notes:         document.getElementById("as-notes").value.trim(),
+    _local:        true,   // user's own scout (not from the shared sheet)
   };
   scouts.push(newScout);
   setScoutsCache(scouts);
@@ -2774,11 +2793,13 @@ function renderUserChip(account) {
     showLoginScreen();
     return;
   }
+  if (!_authRequired) _isOwner = true; // legacy single-dataset mode → treat as owner
   if (account) {
     renderUserChip(account);
-    // Diagnostic: log the identity the server sees + whether owner-match fired.
+    // Identify the owner (keeps the shared scout sheet as their private master list).
     try {
       const who = await (await _apiFetch("/api/whoami")).json();
+      _isOwner = !!who.is_owner;
       console.log("%c[Trending Sounds] whoami →", "font-weight:bold;color:#2563eb", who);
     } catch {}
   }
