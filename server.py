@@ -83,9 +83,13 @@ def validate_bearer(auth_header):
         oid = claims.get("oid") or claims.get("sub")
         if not oid:
             return None
+        # Username claim varies by token version: v2 uses preferred_username/email,
+        # v1 uses upn/unique_name. Check all so owner-matching is robust.
+        email = (claims.get("preferred_username") or claims.get("upn")
+                 or claims.get("email") or claims.get("unique_name") or "").lower()
         return {
             "oid": oid,
-            "email": (claims.get("preferred_username") or claims.get("email") or "").lower(),
+            "email": email,
             "name": claims.get("name", ""),
         }
     except Exception:
@@ -226,6 +230,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             if self.path == "/api/data":
                 self.handle_data_read(user)
+            elif self.path == "/api/whoami":
+                # Diagnostic: what identity does the server see, and does it match the owner?
+                self.send_json(200, {
+                    "oid": user.get("oid"),
+                    "email": user.get("email"),
+                    "legacy": bool(user.get("legacy")),
+                    "owner_email_configured": bool(OWNER_EMAIL),
+                    "is_owner": bool(OWNER_EMAIL) and user.get("email") == OWNER_EMAIL,
+                })
             elif self.path.startswith("/api/spotify-track"):
                 self.handle_spotify_track()
             else:

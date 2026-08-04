@@ -2774,7 +2774,14 @@ function renderUserChip(account) {
     showLoginScreen();
     return;
   }
-  if (account) renderUserChip(account);
+  if (account) {
+    renderUserChip(account);
+    // Diagnostic: log the identity the server sees + whether owner-match fired.
+    try {
+      const who = await (await _apiFetch("/api/whoami")).json();
+      console.log("%c[Trending Sounds] whoami →", "font-weight:bold;color:#2563eb", who);
+    } catch {}
+  }
   await initDataLayer();
   showDashboard();
 })();
