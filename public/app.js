@@ -429,7 +429,7 @@ async function handleQuickAdd() {
 
 async function fetchSpotifyQuickAdd(url) {
   try {
-    const resp = await fetch(`/api/spotify-track?url=${encodeURIComponent(url)}`);
+    const resp = await _apiFetch(`/api/spotify-track?url=${encodeURIComponent(url)}`);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     showQuickAddForm({
@@ -1592,7 +1592,7 @@ async function fetchSounds(filters) {
     for (let p = 1; p <= pageCount; p++) {
       const params = new URLSearchParams(buildApiParams(filters, p));
       fetches.push(
-        fetch(`/api/external/v1/tiktok-sounds/?${params}`).then(r => {
+        _apiFetch(`/api/external/v1/tiktok-sounds/?${params}`).then(r => {
           if (!r.ok) throw new Error(`API returned ${r.status}`);
           return r.json();
         })
