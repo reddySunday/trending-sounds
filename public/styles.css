@@ -2597,6 +2597,20 @@ header h1 {
   white-space: nowrap;
 }
 .compose-fallback-btn:hover { background: var(--blue-light); }
+.compose-fallback-btn--alt { background: #334155; }
+.compose-fallback-btn--alt:hover { background: #475569; }
+.compose-fallback-link {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 4px 2px;
+}
+.compose-fallback-link:hover { color: #bfdbfe; text-decoration: underline; }
 .compose-fallback-close {
   flex-shrink: 0;
   background: transparent;

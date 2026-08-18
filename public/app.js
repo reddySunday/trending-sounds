@@ -1887,39 +1887,60 @@ const DEFAULT_TEMPLATES = {
   followUp: `Hi, just circling back on this. I know you're probably busy but let me know!`
 };
 
-// Open Outlook Web compose with subject + plain-text body.
-// If the browser blocks the pop-up, fall back to a direct link (a real click
-// bypasses pop-up blockers) and copy the email text to the clipboard.
-function openOutlookCompose(subject, body, to) {
+// Build the Outlook Web compose deep-link. `online=1` makes it open the web
+// compose reliably; encodeURIComponent keeps spaces as %20 (Outlook renders
+// "+" literally). Kept to plain-text body.
+function _outlookComposeUrl(subject, body, to) {
   const subj = encodeURIComponent(subject);
   const b    = encodeURIComponent(body);
   const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-  const url = `https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`;
-  let win = null;
-  try { win = window.open(url, "_blank", "noopener"); } catch (e) {}
-  if (!win || win.closed || typeof win.closed === "undefined") {
-    showComposeFallback(url, body);
-  }
+  return `https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}&online=1`;
 }
 
-// Shown when the compose pop-up is blocked: a direct link the user can click
-// (direct clicks aren't pop-up-blocked) plus the email copied as a backup.
-function showComposeFallback(url, body) {
-  try { navigator.clipboard?.writeText(body).catch(() => {}); } catch (e) {}
+// mailto: opens the user's default mail app (Outlook desktop for M365 users)
+// with the email pre-filled — no Outlook-web session/account dependency.
+function _mailtoUrl(subject, body, to) {
+  return `mailto:${to || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// Open Outlook Web compose. The web deep-link is session-dependent and can land
+// on the inbox (e.g. multiple accounts signed in), and pop-ups can be blocked —
+// both fail silently. So we always surface a small helper with a mailto
+// alternative + copy, and a direct link when the pop-up was blocked.
+function openOutlookCompose(subject, body, to) {
+  const outlookUrl = _outlookComposeUrl(subject, body, to);
+  let win = null;
+  try { win = window.open(outlookUrl, "_blank", "noopener"); } catch (e) {}
+  const blocked = !win || win.closed || typeof win.closed === "undefined";
+  showComposeHelper({ outlookUrl, mailtoUrl: _mailtoUrl(subject, body, to), body, blocked });
+}
+
+function showComposeHelper({ outlookUrl, mailtoUrl, body, blocked }) {
   const existing = document.getElementById("compose-fallback");
   if (existing) existing.remove();
   const el = document.createElement("div");
   el.id = "compose-fallback";
   el.className = "compose-fallback";
   el.innerHTML = `
-    <span class="compose-fallback-msg">Your browser blocked the email window. It's copied to your clipboard —</span>
-    <a class="compose-fallback-btn" target="_blank" rel="noopener">Open email in Outlook ↗</a>
+    <span class="compose-fallback-msg"></span>
+    <a class="compose-fallback-btn" data-role="outlook" target="_blank" rel="noopener" hidden>Open email ↗</a>
+    <a class="compose-fallback-btn compose-fallback-btn--alt" data-role="mailto">Open in mail app</a>
+    <button class="compose-fallback-link" data-role="copy">Copy email</button>
     <button class="compose-fallback-close" aria-label="Dismiss">✕</button>`;
-  const link = el.querySelector(".compose-fallback-btn");
-  link.href = url;                              // set via property to avoid HTML injection
-  link.addEventListener("click", () => el.remove());
+  el.querySelector(".compose-fallback-msg").textContent = blocked
+    ? "Your browser blocked the email window."
+    : "Opened in Outlook. Went to your inbox instead?";
+  const outlookLink = el.querySelector('[data-role="outlook"]');
+  if (blocked) { outlookLink.hidden = false; outlookLink.href = outlookUrl; outlookLink.addEventListener("click", () => el.remove()); }
+  el.querySelector('[data-role="mailto"]').href = mailtoUrl;
+  const copyBtn = el.querySelector('[data-role="copy"]');
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard?.writeText(body).catch(() => {});
+    copyBtn.textContent = "Copied ✓";
+  });
   el.querySelector(".compose-fallback-close").addEventListener("click", () => el.remove());
   document.body.appendChild(el);
+  if (!blocked) setTimeout(() => { if (el.isConnected) el.remove(); }, 12000);
 }
 
 function getTemplates() {
