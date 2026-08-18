@@ -1903,19 +1903,25 @@ function _mailtoUrl(subject, body, to) {
   return `mailto:${to || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-// Open Outlook Web compose. The web deep-link is session-dependent and can land
-// on the inbox (e.g. multiple accounts signed in), and pop-ups can be blocked —
-// both fail silently. So we always surface a small helper with a mailto
-// alternative + copy, and a direct link when the pop-up was blocked.
+// Open Outlook Web compose. We open it via a real anchor click rather than
+// window.open(..., "noopener"): Safari opens a features-string window.open in a
+// partitioned/popup context where the Outlook login session doesn't resolve, so
+// it redirects to the inbox (the "loads twice" symptom). A plain target=_blank
+// link is a normal first-party navigation that carries the session — works in
+// Safari and Chrome. We still surface a helper with a mailto alternative + copy,
+// since the web deep-link can also fail on multi-account browsers.
 function openOutlookCompose(subject, body, to) {
   const outlookUrl = _outlookComposeUrl(subject, body, to);
-  let win = null;
-  try { win = window.open(outlookUrl, "_blank", "noopener"); } catch (e) {}
-  const blocked = !win || win.closed || typeof win.closed === "undefined";
-  showComposeHelper({ outlookUrl, mailtoUrl: _mailtoUrl(subject, body, to), body, blocked });
+  const a = document.createElement("a");
+  a.href = outlookUrl;
+  a.target = "_blank";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showComposeHelper({ outlookUrl, mailtoUrl: _mailtoUrl(subject, body, to), body });
 }
 
-function showComposeHelper({ outlookUrl, mailtoUrl, body, blocked }) {
+function showComposeHelper({ outlookUrl, mailtoUrl, body }) {
   const existing = document.getElementById("compose-fallback");
   if (existing) existing.remove();
   const el = document.createElement("div");
@@ -1923,15 +1929,14 @@ function showComposeHelper({ outlookUrl, mailtoUrl, body, blocked }) {
   el.className = "compose-fallback";
   el.innerHTML = `
     <span class="compose-fallback-msg"></span>
-    <a class="compose-fallback-btn" data-role="outlook" target="_blank" rel="noopener" hidden>Open email ↗</a>
     <a class="compose-fallback-btn compose-fallback-btn--alt" data-role="mailto">Open in mail app</a>
+    <a class="compose-fallback-btn" data-role="outlook" target="_blank">Open in Outlook web ↗</a>
     <button class="compose-fallback-link" data-role="copy">Copy email</button>
     <button class="compose-fallback-close" aria-label="Dismiss">✕</button>`;
-  el.querySelector(".compose-fallback-msg").textContent = blocked
-    ? "Your browser blocked the email window."
-    : "Opened in Outlook. Went to your inbox instead?";
+  el.querySelector(".compose-fallback-msg").textContent = "Opened in Outlook. Not the new-email window?";
   const outlookLink = el.querySelector('[data-role="outlook"]');
-  if (blocked) { outlookLink.hidden = false; outlookLink.href = outlookUrl; outlookLink.addEventListener("click", () => el.remove()); }
+  outlookLink.href = outlookUrl;
+  outlookLink.addEventListener("click", () => el.remove());
   el.querySelector('[data-role="mailto"]').href = mailtoUrl;
   const copyBtn = el.querySelector('[data-role="copy"]');
   copyBtn.addEventListener("click", () => {
@@ -1940,7 +1945,7 @@ function showComposeHelper({ outlookUrl, mailtoUrl, body, blocked }) {
   });
   el.querySelector(".compose-fallback-close").addEventListener("click", () => el.remove());
   document.body.appendChild(el);
-  if (!blocked) setTimeout(() => { if (el.isConnected) el.remove(); }, 12000);
+  setTimeout(() => { if (el.isConnected) el.remove(); }, 12000);
 }
 
 function getTemplates() {
