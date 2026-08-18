@@ -1888,11 +1888,38 @@ const DEFAULT_TEMPLATES = {
 };
 
 // Open Outlook Web compose with subject + plain-text body.
+// If the browser blocks the pop-up, fall back to a direct link (a real click
+// bypasses pop-up blockers) and copy the email text to the clipboard.
 function openOutlookCompose(subject, body, to) {
   const subj = encodeURIComponent(subject);
   const b    = encodeURIComponent(body);
   const toParam = to ? `&to=${encodeURIComponent(to)}` : "";
-  window.open(`https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`, "_blank");
+  const url = `https://outlook.office.com/mail/deeplink/compose?subject=${subj}${toParam}&body=${b}`;
+  let win = null;
+  try { win = window.open(url, "_blank", "noopener"); } catch (e) {}
+  if (!win || win.closed || typeof win.closed === "undefined") {
+    showComposeFallback(url, body);
+  }
+}
+
+// Shown when the compose pop-up is blocked: a direct link the user can click
+// (direct clicks aren't pop-up-blocked) plus the email copied as a backup.
+function showComposeFallback(url, body) {
+  try { navigator.clipboard?.writeText(body).catch(() => {}); } catch (e) {}
+  const existing = document.getElementById("compose-fallback");
+  if (existing) existing.remove();
+  const el = document.createElement("div");
+  el.id = "compose-fallback";
+  el.className = "compose-fallback";
+  el.innerHTML = `
+    <span class="compose-fallback-msg">Your browser blocked the email window. It's copied to your clipboard —</span>
+    <a class="compose-fallback-btn" target="_blank" rel="noopener">Open email in Outlook ↗</a>
+    <button class="compose-fallback-close" aria-label="Dismiss">✕</button>`;
+  const link = el.querySelector(".compose-fallback-btn");
+  link.href = url;                              // set via property to avoid HTML injection
+  link.addEventListener("click", () => el.remove());
+  el.querySelector(".compose-fallback-close").addEventListener("click", () => el.remove());
+  document.body.appendChild(el);
 }
 
 function getTemplates() {

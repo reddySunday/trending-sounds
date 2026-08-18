@@ -2566,3 +2566,48 @@ header h1 {
   .user-chip-name { display: none; }        /* keep just the Sign out button on mobile */
   .login-card { padding: 32px 22px; }
 }
+
+/* ============ COMPOSE FALLBACK (pop-up blocked) ============ */
+.compose-fallback {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 6000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 92vw;
+  padding: 12px 14px 12px 18px;
+  background: #1e293b;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+}
+.compose-fallback-msg { opacity: 0.9; }
+.compose-fallback-btn {
+  flex-shrink: 0;
+  padding: 7px 13px;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.compose-fallback-btn:hover { background: var(--blue-light); }
+.compose-fallback-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.compose-fallback-close:hover { color: #fff; }
+
+@media (max-width: 600px) {
+  .compose-fallback { flex-wrap: wrap; gap: 8px; bottom: 14px; }
+}
