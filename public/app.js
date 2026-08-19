@@ -227,6 +227,42 @@ function _isEmpty(v) {
   return false;
 }
 
+// ============ SHARED CONTACT REGISTRY (collision awareness) ============
+// A privacy-safe projection of who has reached out to which artist, so an A&R
+// is warned before duplicating a colleague's outreach. Notes/dashboards stay
+// private — this only holds {artist, song, status, at, by}.
+let _registryCache = {};   // normalizedArtist -> [{artist, song, status, at, by}]
+
+// Must match the server's norm_artist(): NFD, strip accents, lowercase, collapse ws.
+function _normArtist(name) {
+  return (name || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function loadRegistry() {
+  try {
+    const res = await _apiFetch("/api/registry");
+    if (!res.ok) return;
+    const j = await res.json();
+    _registryCache = j.byArtist || {};
+  } catch (e) { /* non-fatal — collision hints just won't show */ }
+}
+
+// Colleague contacts for an artist (excludes the current user, done server-side).
+function colleagueContactsFor(artist) {
+  const na = _normArtist(artist);
+  return na ? (_registryCache[na] || []) : [];
+}
+
+// "Claudia — Replied · Aug 12 · "song"" summary line for a colleague contact.
+function _formatColleagueContact(c) {
+  const stage = PIPELINE_STAGES.find(s => s.key === c.status);
+  const label = stage ? stage.label : (c.status || "");
+  const when = c.at ? new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+  const song = c.song ? ` · “${c.song}”` : "";
+  return `${c.by} — ${label}${when ? " · " + when : ""}${song}`;
+}
+
 // Scouting state
 let _scoutFilter = "all"; // "all" | "Active" | "Not active"
 let _expandedScouts = new Set(); // scout names currently expanded
@@ -468,6 +504,7 @@ function showQuickAddForm(data) {
   currentQAFTab = "email";
   _applyQAFTab("email");
   _fillQAFTemplate(data.artist || "", data.songName || "");
+  updateQAFCollabWarning();
   document.getElementById("quick-add-form").hidden = false;
 }
 
@@ -514,6 +551,19 @@ function refreshQAFTemplate() {
     document.getElementById("qaf-artist").value.trim(),
     document.getElementById("qaf-song").value.trim()
   );
+  updateQAFCollabWarning();
+}
+
+// Warn in the Quick Add form if a colleague has already reached out to this artist.
+function updateQAFCollabWarning() {
+  const el = document.getElementById("qaf-collab-warning");
+  if (!el) return;
+  const artist = document.getElementById("qaf-artist").value.trim();
+  const colleagues = colleagueContactsFor(artist);
+  if (!colleagues.length) { el.hidden = true; el.innerHTML = ""; return; }
+  const lines = colleagues.map(c => `<span class="qaf-collab-line">${escHtml(_formatColleagueContact(c))}</span>`).join("");
+  el.innerHTML = `<strong>⚠ Already contacted by another A&amp;R</strong>${lines}`;
+  el.hidden = false;
 }
 
 function cancelQuickAdd() {
@@ -806,6 +856,13 @@ function renderCRMTable() {
     const dueFollowUp = needsFollowUp(entry);
     const flagHtml = dueFollowUp ? `<span class="crm-followup-flag" title="No reply for 24h+ — time to follow up">Follow up</span>` : "";
 
+    // Colleague collision — has another SUNDAY A&R reached out to this artist?
+    const colleagues = colleagueContactsFor(artist);
+    const collabTitle = colleagues.map(_formatColleagueContact).join(" · ");
+    const collabFlagHtml = colleagues.length
+      ? `<span class="crm-collab-flag" title="${escHtml(collabTitle)}">👥 ${escHtml(colleagues[0].by)}${colleagues.length > 1 ? ` +${colleagues.length - 1}` : ""}</span>`
+      : "";
+
     const expandId = `crm-expand-${idx}`;
     const chevId = `crm-chev-${idx}`;
 
@@ -842,7 +899,7 @@ function renderCRMTable() {
     return `
     <tr class="crm-main-row${dueFollowUp ? " crm-row-due" : ""}" onclick="toggleCRMExpand(${idx})">
       <td class="crm-date">${escHtml(dateStr)}</td>
-      <td class="crm-artist">${escHtml(artist)}${flagHtml}</td>
+      <td class="crm-artist">${escHtml(artist)}${flagHtml}${collabFlagHtml}</td>
       <td class="crm-song">${escHtml(song)}</td>
       <td onclick="event.stopPropagation()">
         <select class="pipeline-select" style="--badge-color:${stage.color}" onchange="crmStatusChange(${idx}, this.value)">
@@ -863,6 +920,13 @@ function renderCRMTable() {
     <tr class="crm-expand-row" id="${expandId}" hidden>
       <td colspan="6">
         <div class="crm-expand-inner">
+          ${colleagues.length ? `
+          <div class="crm-expand-field crm-expand-field--collab">
+            <span class="crm-expand-label">Also contacted by</span>
+            <span class="crm-expand-value crm-collab-list">
+              ${colleagues.map(c => `<span class="crm-collab-item">${escHtml(_formatColleagueContact(c))}</span>`).join("")}
+            </span>
+          </div>` : ""}
           <div class="crm-expand-field">
             <span class="crm-expand-label">Outreach</span>
             <span class="crm-expand-value">${contactHtml}</span>
@@ -1708,6 +1772,10 @@ function renderSounds() {
   soundsList.innerHTML = toShow.map((s, i) => {
     const name = s.tiktok_name_of_sound || s.song_name || "Unknown Sound";
     const artist = s.tiktok_sound_creator_name || s.artists || "Unknown Artist";
+    const _collabs = colleagueContactsFor(artist);
+    const collabBadge = _collabs.length
+      ? `<span class="sound-collab" title="${escHtml(_collabs.map(_formatColleagueContact).join(" · "))}">👥 ${escHtml(_collabs[0].by)}${_collabs.length > 1 ? ` +${_collabs.length - 1}` : ""}</span>`
+      : "";
     const artwork = s.tiktok_image_url || s.song_image_url || "";
     const growth24h = s.tiktok_last_24_hours_video_percentage ?? "N/A";
     const videos24h = s.tiktok_last_24_hours_video_count ?? "";
@@ -1768,7 +1836,7 @@ function renderSounds() {
         ${imgTag}
         <div class="sound-info">
           <div class="sound-name">${tiktokLink ? `<a href="${escHtml(tiktokLink)}" target="_blank" rel="noopener">${escHtml(name)}</a>` : escHtml(name)}</div>
-          <div class="sound-artist">${escHtml(artist)}</div>
+          <div class="sound-artist">${escHtml(artist)}${collabBadge}</div>
           ${buildResearchLinks(artist)}
           ${label ? `<span class="sound-label">${escHtml(label)}</span>` : ""}
           <div class="sound-stats">
@@ -2856,6 +2924,6 @@ function renderUserChip(account) {
       console.log("%c[Trending Sounds] whoami →", "font-weight:bold;color:#2563eb", who);
     } catch {}
   }
-  await initDataLayer();
+  await Promise.all([initDataLayer(), loadRegistry()]);
   showDashboard();
 })();

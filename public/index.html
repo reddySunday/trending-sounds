@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trending Sounds</title>
-  <link rel="stylesheet" href="/styles.css?v=16">
+  <link rel="stylesheet" href="/styles.css?v=17">
 </head>
 <body>
   <!-- Login screen (shown until signed in) -->
@@ -57,6 +57,7 @@
         <div id="quick-add-status" class="quick-add-status"></div>
         <!-- Inline form after fetch -->
         <div id="quick-add-form" hidden>
+          <div id="qaf-collab-warning" class="qaf-collab-warning" hidden></div>
           <div class="quick-add-fields">
             <div class="qaf-field">
               <label class="qaf-label">Artist</label>
@@ -615,7 +616,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
-  <script src="/app.js?v=33"></script>
+  <script src="/app.js?v=34"></script>
 
   <!-- Particle network background -->
   <script>

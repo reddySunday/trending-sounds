@@ -6,7 +6,9 @@ import hashlib
 import http.server
 import json
 import os
+import threading
 import time
+import unicodedata
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -136,6 +138,101 @@ def github_write(filename, data, sha=None):
     )
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read())
+
+
+def github_list_dir(path):
+    """Return the names of sub-directories under `path` in the data repo, or []."""
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{path}"
+    req = urllib.request.Request(url, headers=_gh_headers())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            items = json.loads(r.read())
+            return [it["name"] for it in items if it.get("type") == "dir"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return []
+        raise
+
+
+# ---- Shared contact registry (collision awareness across A&Rs) ----
+# Statuses that mean "this A&R has reached out to the artist" (everything but new).
+REACHED_OUT_STATUSES = {
+    "contacted", "no-reply", "ghosted", "replied",
+    "meeting", "offer", "signed", "already-signed", "passed",
+}
+_registry_cache = {"at": 0.0, "data": None}
+
+
+def norm_artist(name):
+    """Normalize an artist name for cross-user matching: lowercase, strip accents,
+    collapse whitespace. Must match the client's _normArtist()."""
+    s = unicodedata.normalize("NFD", name or "")
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return " ".join(s.lower().split())
+
+
+def build_registry():
+    """Aggregate a privacy-safe contact projection from every user's pipeline.
+    Returns { normalizedArtist: [ {artist, song, status, at, by, oid}, ... ] }.
+    Cached ~45s. Only reached-out entries are included; notes are never touched."""
+    now = time.time()
+    if _registry_cache["data"] is not None and now < _registry_cache["at"] + 45:
+        return _registry_cache["data"]
+
+    oids = github_list_dir("users")
+
+    def load(oid):
+        pipeline, _ = github_read(f"users/{oid}/pipeline_statuses.json")
+        profile, _ = github_read(f"users/{oid}/profile.json")
+        return oid, pipeline or {}, profile or {}
+
+    results = []
+    if oids:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            results = list(ex.map(load, oids))
+
+    by_artist = {}
+    for oid, pipeline, profile in results:
+        by = profile.get("name") or (profile.get("email", "").split("@")[0]) or "An A&R"
+        if not isinstance(pipeline, dict):
+            continue
+        for key, entry in pipeline.items():
+            if not isinstance(entry, dict):
+                continue
+            status = entry.get("status")
+            if status not in REACHED_OUT_STATUSES:
+                continue
+            parts = key.split("|||")
+            artist = entry.get("artist") or (parts[0] if parts else "")
+            song = entry.get("songName") or (parts[1] if len(parts) > 1 else "")
+            at = entry.get("contactedAt") or entry.get("updatedAt") or entry.get("dateAdded")
+            na = norm_artist(artist)
+            if not na:
+                continue
+            by_artist.setdefault(na, []).append({
+                "artist": artist, "song": song, "status": status,
+                "at": at, "by": by, "oid": oid,
+            })
+
+    _registry_cache["data"] = by_artist
+    _registry_cache["at"] = now
+    return by_artist
+
+
+def ensure_profile(user):
+    """Keep users/{oid}/profile.json in sync with the token's name/email so the
+    registry can show real names. Writes only when missing or changed."""
+    if user.get("legacy") or not user.get("oid"):
+        return
+    try:
+        current, sha = github_read(f"users/{user['oid']}/profile.json")
+        desired = {"email": user.get("email", ""), "name": user.get("name", "")}
+        if current != desired:
+            github_write(f"users/{user['oid']}/profile.json", desired, sha)
+    except Exception:
+        pass
+
+
 APP_ID = os.environ.get("CHARTEX_APP_ID", "oisin_IgEZfiJk")
 APP_TOKEN = os.environ.get("CHARTEX_APP_TOKEN", "uvGc0rEopiiAuVN7i7NRLL_ULptr--QAyzUrcDC0q-Y")
 
@@ -230,8 +327,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             if self.path == "/api/data":
                 self.handle_data_read(user)
+            elif self.path == "/api/registry":
+                self.handle_registry(user)
             elif self.path == "/api/whoami":
                 # Diagnostic: what identity does the server see, and does it match the owner?
+                # Refresh the registry profile in the background so sign-in isn't blocked.
+                threading.Thread(target=ensure_profile, args=(user,), daemon=True).start()
                 self.send_json(200, {
                     "oid": user.get("oid"),
                     "email": user.get("email"),
@@ -255,6 +356,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.path = "/index.html"
             # Disable caching for dev
             super().do_GET()
+
+    def handle_registry(self, user):
+        """GET /api/registry — colleague contact projection, excluding the caller.
+        { byArtist: { normalizedArtist: [ {artist, song, status, at, by}, ... ] } }"""
+        if not GITHUB_PAT or not GITHUB_REPO:
+            self.send_json(200, {"byArtist": {}})
+            return
+        try:
+            reg = build_registry()
+            caller = user.get("oid")
+            out = {}
+            for na, contacts in reg.items():
+                others = [{k: v for k, v in c.items() if k != "oid"}
+                          for c in contacts if c.get("oid") != caller]
+                if others:
+                    out[na] = others
+            self.send_json(200, {"byArtist": out})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
 
     def handle_data_read(self, user):
         """GET /api/data — returns all 4 data keys for the signed-in user."""

@@ -2471,6 +2471,49 @@ header h1 {
 .lp-currency-select:focus { border-color: var(--border-focus); }
 .sp-project { font-weight: 600; color: var(--text); min-width: 120px; }
 
+/* ============ COLLEAGUE COLLISION (shared contact registry) ============ */
+/* Amber "another A&R reached out" indicators across Outreach Log / Discover / Quick Add */
+.crm-collab-flag,
+.sound-collab {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: default;
+}
+.sound-collab { font-size: 11px; margin-left: 6px; }
+
+/* Expand-panel detail list in the Outreach Log */
+.crm-expand-field--collab { grid-column: 1 / -1; }
+.crm-collab-list { display: flex; flex-direction: column; gap: 3px; }
+.crm-collab-item { font-size: 12px; color: #92400e; }
+
+/* Quick Add warning banner */
+.qaf-collab-warning {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  color: #92400e;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qaf-collab-warning strong { font-weight: 700; }
+.qaf-collab-line { font-size: 12.5px; opacity: 0.95; }
+
 /* ============ LOGIN SCREEN ============ */
 #login-screen {
   position: fixed;
