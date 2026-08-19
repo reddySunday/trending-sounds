@@ -2923,6 +2923,13 @@ function renderUserChip(account) {
       _isOwner = !!who.is_owner;
       console.log("%c[Trending Sounds] whoami →", "font-weight:bold;color:#2563eb", who);
     } catch {}
+    // Register the display name (from Microsoft) so colleagues see the real name
+    // in collision flags instead of a placeholder. Fire-and-forget.
+    _apiFetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: account.name || account.username || "" }),
+    }).catch(() => {});
   }
   await Promise.all([initDataLayer(), loadRegistry()]);
   showDashboard();

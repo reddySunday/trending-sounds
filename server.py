@@ -161,6 +161,7 @@ REACHED_OUT_STATUSES = {
     "meeting", "offer", "signed", "already-signed", "passed",
 }
 _registry_cache = {"at": 0.0, "data": None}
+_profiles_ensured = set()  # oids whose profile.json we've already synced this process
 
 
 def norm_artist(name):
@@ -221,14 +222,17 @@ def build_registry():
 
 def ensure_profile(user):
     """Keep users/{oid}/profile.json in sync with the token's name/email so the
-    registry can show real names. Writes only when missing or changed."""
-    if user.get("legacy") or not user.get("oid"):
+    registry can show real names. Writes only when missing or changed, and at most
+    once per oid per process (cheap enough to call on every request)."""
+    oid = user.get("oid")
+    if user.get("legacy") or not oid or oid in _profiles_ensured:
         return
     try:
-        current, sha = github_read(f"users/{user['oid']}/profile.json")
+        current, sha = github_read(f"users/{oid}/profile.json")
         desired = {"email": user.get("email", ""), "name": user.get("name", "")}
         if current != desired:
-            github_write(f"users/{user['oid']}/profile.json", desired, sha)
+            github_write(f"users/{oid}/profile.json", desired, sha)
+        _profiles_ensured.add(oid)
     except Exception:
         pass
 
@@ -300,18 +304,49 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         None (→ 401) if the token is bad OR if PyJWT is missing, so we fail closed."""
         if not AUTH_CONFIGURED:
             return {"oid": None, "email": OWNER_EMAIL, "legacy": True}
-        return validate_bearer(self.headers.get("Authorization"))
+        user = validate_bearer(self.headers.get("Authorization"))
+        # Capture the name/email for the shared registry on the user's FIRST
+        # authenticated request (any endpoint) — backgrounded so it never blocks.
+        if user and user.get("oid") not in _profiles_ensured:
+            threading.Thread(target=ensure_profile, args=(user,), daemon=True).start()
+        return user
 
     def do_POST(self):
-        if self.path == "/api/data":
+        if self.path in ("/api/data", "/api/profile"):
             user = self._authed_user()
             if not user:
                 self.send_json(401, {"error": "unauthorized"})
                 return
-            self.handle_data_write(user)
+            if self.path == "/api/profile":
+                self.handle_profile_write(user)
+            else:
+                self.handle_data_write(user)
         else:
             self.send_response(404)
             self.end_headers()
+
+    def handle_profile_write(self, user):
+        """POST /api/profile {name} — record the caller's display name (from the
+        client's Microsoft account) for the shared registry. Identity comes from
+        the validated token; only the display name is taken from the body."""
+        if user.get("legacy") or not user.get("oid") or not GITHUB_PAT:
+            self.send_json(200, {"ok": True})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+        except Exception:
+            body = {}
+        name = (body.get("name") or user.get("name") or "").strip()
+        desired = {"email": user.get("email", ""), "name": name}
+        try:
+            current, sha = github_read(f"users/{user['oid']}/profile.json")
+            if current != desired:
+                github_write(f"users/{user['oid']}/profile.json", desired, sha)
+            _profiles_ensured.add(user["oid"])
+        except Exception:
+            pass
+        self.send_json(200, {"ok": True})
 
     def do_GET(self):
         # Public (no token): the client needs this before it can sign in.
@@ -331,8 +366,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.handle_registry(user)
             elif self.path == "/api/whoami":
                 # Diagnostic: what identity does the server see, and does it match the owner?
-                # Refresh the registry profile in the background so sign-in isn't blocked.
-                threading.Thread(target=ensure_profile, args=(user,), daemon=True).start()
                 self.send_json(200, {
                     "oid": user.get("oid"),
                     "email": user.get("email"),
